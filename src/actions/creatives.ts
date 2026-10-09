@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { emailSoon } from "@/lib/email/soon";
+import { canTransition } from "@/lib/workflow";
+import type { Role, Status } from "@/lib/types";
 import {
   adsFieldsSchema,
   creativeFieldsSchema,
@@ -79,6 +81,9 @@ export async function updateAdsFields(
 ): Promise<Result> {
   const parsed = adsFieldsSchema.safeParse(input);
   if (!parsed.success) return fail(parsed.error.issues[0].message);
+  if (parsed.data.live_state === "live" && !parsed.data.meta_preview_link) {
+    return fail("Add the Meta preview link before marking a creative live.");
+  }
   const supabase = await createClient();
   const { error } = await supabase.from("creatives").update(parsed.data).eq("id", id);
   if (error) return fail(msg(error));
@@ -88,16 +93,72 @@ export async function updateAdsFields(
   return { ok: true };
 }
 
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+/** Who is acting and the creative's current status/file, for server-side transition checks. */
+async function loadContext(supabase: Supabase, id: string) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const [{ data: me }, { data: c }] = await Promise.all([
+    supabase.from("profiles").select("role, active").eq("id", user.id).single(),
+    supabase.from("creatives").select("status, current_version_id").eq("id", id).maybeSingle(),
+  ]);
+  if (!me?.active || !c) return null;
+  return { role: me.role as Role, status: c.status as Status, hasFile: !!c.current_version_id };
+}
+
+/** Moves a creative to another status. Going Live must use goLive() so the DP fields are never skipped. */
 export async function setStatus(id: string, status: string): Promise<Result> {
   const parsed = statusSchema.safeParse(status);
   if (!parsed.success) return fail("Invalid status");
+  if (parsed.data === "live") return fail("Use “Go live” so the went-live time and Meta preview link are recorded.");
   const supabase = await createClient();
+  const ctx = await loadContext(supabase, id);
+  if (!ctx) return fail("Creative not found or you are not signed in.");
+  const check = canTransition(ctx.role, ctx.status, parsed.data, { hasFile: ctx.hasFile });
+  if (!check.ok) return fail(check.reason);
+
   const patch: Record<string, unknown> = { status: parsed.data };
-  // Keep live_state coherent when ads/admin move into or out of live-ish statuses.
-  if (parsed.data === "live") patch.live_state = "live";
+  // Keep live_state coherent when ads/admin move into live-ish statuses.
   if (parsed.data === "paused") patch.live_state = "paused";
   if (parsed.data === "rejected") patch.live_state = "rejected";
   const { error } = await supabase.from("creatives").update(patch).eq("id", id);
+  if (error) return fail(msg(error));
+  revalidatePath(`/creatives/${id}`);
+  revalidatePath("/creatives");
+  emailSoon();
+  return { ok: true };
+}
+
+const goLiveSchema = z.object({
+  wentLiveAt: z.string().datetime("Pick the went-live date and time"),
+  metaPreviewLink: z
+    .string()
+    .trim()
+    .min(1, "Meta preview link is required")
+    .max(2000)
+    .refine((v) => /^https?:\/\//i.test(v), "Link must start with http:// or https://"),
+});
+
+/** Sets a creative live with the required DP details in one validated update. */
+export async function goLive(id: string, input: z.input<typeof goLiveSchema>): Promise<Result> {
+  const parsed = goLiveSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
+  const supabase = await createClient();
+  const ctx = await loadContext(supabase, id);
+  if (!ctx) return fail("Creative not found or you are not signed in.");
+  const check = canTransition(ctx.role, ctx.status, "live", { hasFile: ctx.hasFile });
+  if (!check.ok) return fail(check.reason);
+  const { error } = await supabase
+    .from("creatives")
+    .update({
+      live_state: "live",
+      went_live_at: parsed.data.wentLiveAt,
+      meta_preview_link: parsed.data.metaPreviewLink,
+    })
+    .eq("id", id);
   if (error) return fail(msg(error));
   revalidatePath(`/creatives/${id}`);
   revalidatePath("/creatives");

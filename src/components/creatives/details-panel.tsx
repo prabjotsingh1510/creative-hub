@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "./badges";
+import { GoLiveDialog } from "./go-live-dialog";
+import { canEditLiveState } from "@/lib/workflow";
 import {
   allowedNextStatuses,
   canEditAdsFields,
@@ -90,11 +92,26 @@ export function DetailsPanel({ creative: c, role }: { creative: Creative; role: 
 }
 
 function StatusSection({ c, role }: { c: Creative; role: Role }) {
-  const options = allowedNextStatuses(role, c.status);
+  const options = allowedNextStatuses(role, c.status, !!c.current_version_id);
   const [next, setNext] = useState<Status | "">("");
+  const [liveOpen, setLiveOpen] = useState(false);
+  const router = useRouter();
   const { pending, run } = useSave();
   return (
     <Section title="Status">
+      <GoLiveDialog
+        open={liveOpen}
+        onOpenChange={setLiveOpen}
+        creativeId={c.id}
+        title={c.title}
+        defaultLink={c.meta_preview_link}
+        onResult={(ok) => {
+          if (ok) {
+            setNext("");
+            router.refresh();
+          }
+        }}
+      />
       <StatusBadge status={c.status} />
       {options.length > 0 && !c.deleted_at ? (
         <div className="flex gap-2">
@@ -104,7 +121,10 @@ function StatusSection({ c, role }: { c: Creative; role: Role }) {
               <option key={s} value={s}>{STATUS_LABEL[s]}</option>
             ))}
           </select>
-          <Button disabled={!next || pending} onClick={() => run(() => setStatus(c.id, next), "Status updated")}>
+          <Button
+            disabled={!next || pending}
+            onClick={() => (next === "live" ? setLiveOpen(true) : run(() => setStatus(c.id, next as Status), "Status updated"))}
+          >
             Update
           </Button>
         </div>
@@ -218,9 +238,12 @@ function AdsSection({ c, role }: { c: Creative; role: Role }) {
   const [state, setState] = useState<LiveState>(c.live_state);
   const [wentLive, setWentLive] = useState(toISTInput(c.went_live_at));
 
-  if (!canEditAdsFields(role)) {
+  if (!canEditAdsFields(role) || !canEditLiveState(role, c.status)) {
     return (
-      <Section title="Live status (Decision Pinnacle)">
+      <Section
+        title="Live status (Decision Pinnacle)"
+        hint={canEditAdsFields(role) ? "Available once the creative has been sent to ads." : undefined}
+      >
         <Field label="Live state">{LIVE_LABEL[c.live_state]}</Field>
         <Field label="Went live at">{formatIST(c.went_live_at)}</Field>
         <Field label="Meta Ads preview"><LinkOrDash href={c.meta_preview_link} /></Field>
