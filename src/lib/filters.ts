@@ -119,7 +119,7 @@ export function quickFilters(role: Role): QuickFilter[] {
 
 export function isQuickFilterActive(f: ListFilters, q: QuickFilter): boolean {
   const target = filtersToParams({ ...q.filters, view: f.view });
-  const current = filtersToParams({ ...f, q: "", sort: q.filters.sort ?? f.sort, view: f.view });
+  const current = filtersToParams({ ...f, q: "", sort: q.filters.sort ?? "newest", view: f.view });
   return target.toString() === current.toString();
 }
 

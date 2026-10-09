@@ -1,99 +1,115 @@
 import Link from "next/link";
-import { LayoutGrid, Plus, Table2, ImageOff, Film } from "lucide-react";
+import { Plus, ImageOff, Film } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile, signPaths } from "@/lib/session";
 import { canCreateRequest } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
+import { FilterBar } from "@/components/creatives/filter-bar";
 import { LiveBadge, StatusBadge, TimelinessBadge } from "@/components/creatives/badges";
 import { formatDateOnly } from "@/lib/time";
-import { STATUSES, STATUS_LABEL, type Creative, type CreativeVersion, type Status } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { hasActiveFilters, parseFilters, sanitizeSearch } from "@/lib/filters";
+import type { Creative } from "@/lib/types";
 
 export const metadata = { title: "Creatives" };
 
-type Row = Creative & { current: Pick<CreativeVersion, "thumb_path" | "file_path" | "mime" | "version_no"> | null };
+type Row = Creative & {
+  thumb_path: string | null;
+  file_path: string | null;
+  mime: string | null;
+  version_no: number | null;
+};
 
 export default async function CreativesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; status?: string; deleted?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const sp = await searchParams;
+  const f = parseFilters(await searchParams);
   const profile = await requireProfile();
-  const view = sp.view === "table" ? "table" : "grid";
-  const status = STATUSES.includes(sp.status as Status) ? (sp.status as Status) : null;
-  const showDeleted = profile.role === "admin" && sp.deleted === "1";
-
+  const filters = profile.role === "admin" ? f : { ...f, deleted: false };
   const supabase = await createClient();
-  let q = supabase
-    .from("creatives")
-    .select("*, current:creative_versions!creatives_current_version_fk(thumb_path,file_path,mime,version_no)")
-    .order("created_at", { ascending: false });
-  q = showDeleted ? q.not("deleted_at", "is", null) : q.is("deleted_at", null);
-  if (status) q = q.eq("status", status);
-  const { data, error } = await q;
-  const rows = (data ?? []) as unknown as Row[];
 
-  const urls = await signPaths(rows.map((r) => r.current?.thumb_path ?? (r.current?.mime.startsWith("image/") ? r.current.file_path : null)));
-  const thumbOf = (r: Row) =>
-    r.current ? urls[r.current.thumb_path ?? (r.current.mime.startsWith("image/") ? r.current.file_path : "")] : undefined;
+  // Free-text search (title, campaign, brief, notes, comments) resolves to ids first.
+  let searchIds: string[] | null = null;
+  const term = sanitizeSearch(filters.q);
+  if (term) {
+    const { data } = await supabase.rpc("search_creative_ids", { q: term });
+    searchIds = (data ?? []) as string[];
+  }
 
-  const href = (patch: Record<string, string | null>) => {
-    const p = new URLSearchParams();
-    const merged = { view, status, deleted: showDeleted ? "1" : null, ...patch };
-    Object.entries(merged).forEach(([k, v]) => v && p.set(k, v));
-    return `/creatives?${p.toString()}`;
-  };
+  let q = supabase.from("creatives_list").select("*");
+  q = filters.deleted ? q.not("deleted_at", "is", null) : q.is("deleted_at", null);
+  if (filters.status.length) q = q.in("status", filters.status);
+  if (filters.live.length) q = q.in("live_state", filters.live);
+  if (filters.campaign) q = q.eq("campaign", filters.campaign);
+  if (filters.format) q = q.eq("format", filters.format);
+  if (filters.uploader) q = q.contains("uploader_ids", [filters.uploader]);
+  if (filters.timing) q = q.eq("timing", filters.timing);
+  if (filters.dueFrom) q = q.gte("due_date", filters.dueFrom);
+  if (filters.dueTo) q = q.lte("due_date", filters.dueTo);
+  // Date ranges are IST calendar days.
+  if (filters.subFrom) q = q.gte("submitted_at", `${filters.subFrom}T00:00:00+05:30`);
+  if (filters.subTo) q = q.lte("submitted_at", `${filters.subTo}T23:59:59.999+05:30`);
+  if (searchIds) q = q.in("id", searchIds.length ? searchIds : ["00000000-0000-0000-0000-000000000000"]);
+  q =
+    filters.sort === "due"
+      ? q.order("due_date", { ascending: true, nullsFirst: false })
+      : filters.sort === "updated"
+        ? q.order("updated_at", { ascending: false })
+        : filters.sort === "live"
+          ? q.order("went_live_at", { ascending: false, nullsFirst: false })
+          : q.order("created_at", { ascending: false });
+  q = q.limit(200);
+
+  const [{ data, error }, { data: campaignRows }, { data: people }] = await Promise.all([
+    q,
+    supabase.from("creatives").select("campaign").not("campaign", "is", null).is("deleted_at", null),
+    supabase.from("profiles").select("id, name, role").in("role", ["admin", "creative"]).eq("active", true),
+  ]);
+  const rows = (data ?? []) as Row[];
+  const campaigns = [...new Set((campaignRows ?? []).map((r) => r.campaign as string))].sort();
+
+  const urls = await signPaths(rows.map((r) => r.thumb_path ?? (r.mime?.startsWith("image/") ? r.file_path : null)));
+  const thumbOf = (r: Row) => urls[r.thumb_path ?? (r.mime?.startsWith("image/") ? (r.file_path ?? "") : "")];
+  const active = hasActiveFilters(filters);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-semibold">Creatives</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex rounded-lg border p-0.5" role="group" aria-label="View">
-            <Link href={href({ view: "grid" })} aria-label="Grid view" className={cn("rounded-md p-1.5", view === "grid" && "bg-muted")}>
-              <LayoutGrid className="size-4" />
-            </Link>
-            <Link href={href({ view: "table" })} aria-label="Table view" className={cn("rounded-md p-1.5", view === "table" && "bg-muted")}>
-              <Table2 className="size-4" />
-            </Link>
-          </div>
-          {canCreateRequest(profile.role) && (
-            <Link href="/creatives/new">
-              <Button size="lg"><Plus /> New request</Button>
-            </Link>
-          )}
-        </div>
-      </div>
-
-      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1" role="group" aria-label="Filter by status">
-        <Chip href={href({ status: null })} active={!status}>All</Chip>
-        {STATUSES.map((s) => (
-          <Chip key={s} href={href({ status: s })} active={status === s}>{STATUS_LABEL[s]}</Chip>
-        ))}
-        {profile.role === "admin" && (
-          <Chip href={href({ deleted: showDeleted ? null : "1" })} active={showDeleted}>Deleted</Chip>
+        {canCreateRequest(profile.role) && (
+          <Link href="/creatives/new" className="ml-auto">
+            <Button size="lg"><Plus /> New request</Button>
+          </Link>
         )}
       </div>
+
+      <FilterBar
+        filters={filters}
+        role={profile.role}
+        campaigns={campaigns}
+        uploaders={(people ?? []).map((p) => ({ id: p.id as string, name: p.name as string }))}
+        total={rows.length}
+      />
 
       {error && <p role="alert" className="text-sm text-destructive">Couldn’t load creatives: {error.message}</p>}
 
       {!error && rows.length === 0 && (
         <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          {status || showDeleted ? "No creatives match this filter." : "No creatives yet."}
-          {canCreateRequest(profile.role) && !status && !showDeleted && " Create a request to get started."}
+          {active ? "No creatives match these filters." : "No creatives yet."}
+          {canCreateRequest(profile.role) && !active && " Create a request to get started."}
         </div>
       )}
 
-      {view === "grid" ? (
+      {filters.view === "grid" ? (
         <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {rows.map((r) => (
             <li key={r.id}>
               <Link href={`/creatives/${r.id}`} className="group block overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 outline-none">
                 <div className="relative aspect-[4/3] bg-muted">
                   <Thumb url={thumbOf(r)} format={r.format} />
-                  {r.current && r.current.version_no > 1 && (
-                    <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-xs font-medium text-white">v{r.current.version_no}</span>
+                  {r.version_no && r.version_no > 1 && (
+                    <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-xs font-medium text-white">v{r.version_no}</span>
                   )}
                 </div>
                 <div className="space-y-2 p-3">
@@ -149,22 +165,8 @@ export default async function CreativesPage({
           </div>
         )
       )}
+      {rows.length === 200 && <p className="text-xs text-muted-foreground">Showing the first 200 results. Narrow the filters to see more.</p>}
     </div>
-  );
-}
-
-function Chip({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "true" : undefined}
-      className={cn(
-        "shrink-0 rounded-full border px-3 py-1 text-xs",
-        active ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:bg-muted",
-      )}
-    >
-      {children}
-    </Link>
   );
 }
 
