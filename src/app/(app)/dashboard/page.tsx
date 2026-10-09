@@ -24,48 +24,38 @@ interface Row {
   deadline_at: string | null;
 }
 
-const SEVEN_DAYS = 7 * 24 * 3600_000;
-
 export default async function DashboardPage() {
   const profile = await requireProfile();
   const supabase = await createClient();
 
-  const [{ data, error }, { data: activity }, { data: people }] = await Promise.all([
-    supabase
-      .from("creatives_list")
-      .select("id,title,status,live_state,due_date,submitted_at,went_live_at,meta_preview_link,timing,deadline_at")
-      .is("deleted_at", null),
-    supabase
-      .from("activity_log")
-      .select("*, creatives(title)")
-      .order("created_at", { ascending: false })
-      .limit(20),
+  const waitingStatusList = waitingStatuses(profile.role);
+  const cols = "id,title,status,live_state,due_date,submitted_at,went_live_at,meta_preview_link,timing,deadline_at";
+  const waitingFilter =
+    profile.role === "admin"
+      ? `status.in.(${waitingStatusList.join(",")}),timing.eq.overdue`
+      : `status.in.(${waitingStatusList.join(",")})`;
+
+  // Counts come from one database call; each list fetches only the 10-20 rows it shows.
+  const [stats, waitingRes, overdueRes, liveRes, { data: activity }, { data: people }] = await Promise.all([
+    supabase.rpc("dashboard_stats"),
+    supabase.from("creatives_list").select(cols, { count: "exact" }).is("deleted_at", null).or(waitingFilter).order("due_date", { ascending: true, nullsFirst: false }).limit(10),
+    supabase.from("creatives_list").select(cols, { count: "exact" }).is("deleted_at", null).eq("timing", "overdue").order("deadline_at", { ascending: true }).limit(10),
+    supabase.from("creatives_list").select(cols).is("deleted_at", null).not("went_live_at", "is", null).order("went_live_at", { ascending: false }).limit(10),
+    supabase.from("activity_log").select("*, creatives(title)").order("created_at", { ascending: false }).limit(20),
     supabase.from("profiles").select("id, name"),
   ]);
+  const error = stats.error ?? waitingRes.error ?? overdueRes.error ?? liveRes.error;
   if (error) return <p role="alert" className="text-sm text-destructive">Couldn’t load the dashboard: {error.message}</p>;
 
-  const rows = (data ?? []) as Row[];
+  const s = stats.data as { by_status: Partial<Record<Status, number>>; overdue: number; live_now: number; went_live_7d: number };
   const names = new Map((people ?? []).map((p) => [p.id as string, p.name as string]));
-  const now = Date.now();
-
-  const byStatus = new Map<Status, number>();
-  rows.forEach((r) => byStatus.set(r.status, (byStatus.get(r.status) ?? 0) + 1));
-
-  const overdue = rows
-    .filter((r) => r.timing === "overdue")
-    .sort((a, b) => new Date(a.deadline_at!).getTime() - new Date(b.deadline_at!).getTime());
-  const liveNow = rows.filter((r) => r.live_state === "live").length;
-  const recentWindow = rows.filter((r) => r.went_live_at && now - new Date(r.went_live_at).getTime() <= SEVEN_DAYS).length;
-  const recentlyLive = rows
-    .filter((r) => r.went_live_at)
-    .sort((a, b) => new Date(b.went_live_at!).getTime() - new Date(a.went_live_at!).getTime())
-    .slice(0, 10);
-
-  const waitingSet = new Set<Status>(waitingStatuses(profile.role));
-  const waiting = rows.filter((r) => waitingSet.has(r.status) || (profile.role === "admin" && r.timing === "overdue"));
+  const waiting = (waitingRes.data ?? []) as unknown as Row[];
+  const overdue = (overdueRes.data ?? []) as unknown as Row[];
+  const recentlyLive = (liveRes.data ?? []) as unknown as Row[];
   const waitingLabel =
     profile.role === "admin" ? "Needs your review, plus overdue" : profile.role === "creative" ? "Requests and changes for you" : "Ready to go live";
 
+  const stats_by_status = s.by_status;
   const feed = (activity ?? []) as (ActivityRow & { creatives: { title: string } | null })[];
 
   return (
@@ -77,20 +67,20 @@ export default async function DashboardPage() {
       </h1>
 
       <section aria-label="Summary" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <Stat label="Overdue" value={overdue.length} href="/creatives?timing=overdue&sort=due" tone={overdue.length ? "bad" : undefined} />
-        <Stat label="Live now" value={liveNow} href="/creatives?live=live&sort=live" tone="good" />
-        <Stat label="Went live (7 days)" value={recentWindow} href="/creatives?sort=live" />
-        {STATUSES.map((s) => (
-          <Stat key={s} label={STATUS_LABEL[s]} value={byStatus.get(s) ?? 0} href={`/creatives?status=${s}`} />
+        <Stat label="Overdue" value={s.overdue} href="/creatives?timing=overdue&sort=due" tone={overdue.length ? "bad" : undefined} />
+        <Stat label="Live now" value={s.live_now} href="/creatives?live=live&sort=live" tone="good" />
+        <Stat label="Went live (7 days)" value={s.went_live_7d} href="/creatives?sort=live" />
+        {STATUSES.map((st) => (
+          <Stat key={st} label={STATUS_LABEL[st]} value={stats_by_status[st] ?? 0} href={`/creatives?status=${st}`} />
         ))}
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Panel title="Waiting on me" hint={waitingLabel} count={waiting.length}>
+        <Panel title="Waiting on me" hint={waitingLabel} count={waitingRes.count ?? waiting.length}>
           {waiting.length === 0 ? (
             <Empty>Nothing waiting on you. 🎉</Empty>
           ) : (
-            waiting.slice(0, 10).map((r) => (
+            waiting.map((r) => (
               <Item key={r.id} href={`/creatives/${r.id}`} title={r.title}>
                 <StatusBadge status={r.status} />
                 {r.timing === "overdue" && <TimelinessBadge due={r.due_date} submittedAt={r.submitted_at} />}
@@ -100,11 +90,11 @@ export default async function DashboardPage() {
           )}
         </Panel>
 
-        <Panel title="Overdue" hint="Past due date, nothing submitted — most overdue first" count={overdue.length}>
+        <Panel title="Overdue" hint="Past due date, nothing submitted — most overdue first" count={overdueRes.count ?? overdue.length}>
           {overdue.length === 0 ? (
             <Empty>Nothing overdue.</Empty>
           ) : (
-            overdue.slice(0, 10).map((r) => (
+            overdue.map((r) => (
               <Item key={r.id} href={`/creatives/${r.id}`} title={r.title}>
                 <TimelinessBadge due={r.due_date} submittedAt={r.submitted_at} />
                 <span className="text-xs text-muted-foreground">Due {formatDateOnly(r.due_date)}</span>

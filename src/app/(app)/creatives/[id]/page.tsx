@@ -9,6 +9,7 @@ import { DetailsPanel } from "@/components/creatives/details-panel";
 import { CommentThread } from "@/components/comments/comment-thread";
 import { ActivityLog } from "@/components/creatives/activity-log";
 import { DetailTabs } from "@/components/creatives/detail-tabs";
+import { PAGE, cursorOf, takePage } from "@/lib/cursor";
 import { MobileActionBar } from "@/components/creatives/mobile-action-bar";
 import type {
   ActivityRow,
@@ -37,14 +38,16 @@ export default async function CreativePage({
 
   const [versionsRes, commentsRes, activityRes, profilesRes] = await Promise.all([
     supabase.from("creative_versions").select("*").eq("creative_id", id).order("version_no", { ascending: false }),
-    supabase.from("comments").select("*, comment_attachments(*)").eq("creative_id", id).order("created_at"),
-    supabase.from("activity_log").select("*").eq("creative_id", id).order("created_at", { ascending: false }).limit(300),
+    supabase.from("comments").select("*, comment_attachments(*)").eq("creative_id", id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(PAGE + 1),
+    supabase.from("activity_log").select("*").eq("creative_id", id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(PAGE + 1),
     supabase.from("profiles").select("id,name,role,team,avatar_url,email,active").eq("active", true),
   ]);
 
   const versions = (versionsRes.data ?? []) as CreativeVersion[];
-  const comments = (commentsRes.data ?? []) as (CommentRow & { comment_attachments: CommentAttachment[] })[];
-  const activity = (activityRes.data ?? []) as ActivityRow[];
+  const commentPage = takePage((commentsRes.data ?? []) as (CommentRow & { comment_attachments: CommentAttachment[] })[]);
+  const comments = commentPage.page.reverse(); // newest 30, shown oldest-first
+  const activityPage = takePage((activityRes.data ?? []) as ActivityRow[]);
+  const activity = activityPage.page;
   const people = (profilesRes.data ?? []) as Profile[];
 
   const urls = await signPaths([
@@ -89,6 +92,8 @@ export default async function CreativePage({
             me={profile}
             people={people}
             highlightId={highlightComment}
+            hasEarlier={commentPage.hasMore}
+            earlierCursor={comments.length ? cursorOf(comments[0]) : null}
             versions={versions.map((v) => ({ id: v.id, version_no: v.version_no }))}
             initial={comments.map((cm) => ({
               ...cm,
@@ -96,7 +101,7 @@ export default async function CreativePage({
             }))}
           />
         }
-        timeline={<ActivityLog rows={activity} people={people} />}
+        timeline={<ActivityLog creativeId={c.id} rows={activity} people={people} hasMore={activityPage.hasMore} />}
       />
     </div>
   );

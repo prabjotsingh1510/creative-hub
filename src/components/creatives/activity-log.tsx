@@ -1,13 +1,42 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
+import { loadMoreActivity } from "@/actions/pagination";
+import { Button } from "@/components/ui/button";
+import { cursorOf, type Cursor } from "@/lib/cursor";
 import { ACTIVITY_GROUPS, activityGroupOf, describeActivity, type ActivityGroup } from "@/lib/activity";
 import { formatIST } from "@/lib/time";
 import type { ActivityRow, Profile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** Immutable timeline for one creative, filterable by event type. */
-export function ActivityLog({ rows, people }: { rows: ActivityRow[]; people: Pick<Profile, "id" | "name">[] }) {
+export function ActivityLog({
+  creativeId,
+  rows: initial,
+  people,
+  hasMore: initialHasMore,
+}: {
+  creativeId: string;
+  rows: ActivityRow[];
+  people: Pick<Profile, "id" | "name">[];
+  hasMore: boolean;
+}) {
+  const [extra, setExtra] = useState<ActivityRow[]>([]);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [loading, setLoading] = useState(false);
+  const rows = [...initial, ...extra.filter((e) => !initial.some((i) => i.id === e.id))];
+  async function more() {
+    const last = rows[rows.length - 1];
+    if (!last || loading) return;
+    setLoading(true);
+    const cursor: Cursor = cursorOf(last);
+    const res = await loadMoreActivity(creativeId, cursor);
+    setLoading(false);
+    if (!res.ok) return void toast.error(res.error);
+    setExtra((p) => [...p, ...res.rows]);
+    setHasMore(res.hasMore);
+  }
   const [group, setGroup] = useState<ActivityGroup | "all">("all");
   const name = (id: string | null) => people.find((p) => p.id === id)?.name ?? "System";
   const present = new Set(rows.map((r) => activityGroupOf(r.action)));
@@ -41,6 +70,11 @@ export function ActivityLog({ rows, people }: { rows: ActivityRow[]; people: Pic
             </li>
           ))}
         </ol>
+      )}
+      {hasMore && group === "all" && (
+        <Button type="button" variant="outline" className="mt-3 w-full" disabled={loading} onClick={() => void more()}>
+          {loading ? "Loading…" : "Load older activity"}
+        </Button>
       )}
     </section>
   );

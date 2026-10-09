@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { MessageSquareReply, Paperclip, Pin, PinOff, Send, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { markChannelRead, postMessage, setMessagePinned } from "@/actions/channels";
+import { loadEarlierMessages } from "@/actions/pagination";
+import type { Cursor } from "@/lib/cursor";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { uploadAttachment } from "@/lib/upload";
@@ -37,14 +39,31 @@ export function ChannelChat({
   people,
   initial,
   highlightId,
+  hasEarlier = false,
+  earlierCursor = null,
 }: {
   channelId: string;
   me: Profile;
   people: Profile[];
   initial: ChatMessage[];
   highlightId?: string;
+  hasEarlier?: boolean;
+  earlierCursor?: Cursor | null;
 }) {
   const [messages, setMessages] = useState(initial);
+  const [more, setMore] = useState({ has: hasEarlier, cursor: earlierCursor, loading: false });
+  async function loadEarlier() {
+    if (!more.cursor || more.loading) return;
+    setMore((m) => ({ ...m, loading: true }));
+    const res = await loadEarlierMessages(channelId, more.cursor);
+    if (!res.ok) {
+      toast.error(res.error);
+      setMore((m) => ({ ...m, loading: false }));
+      return;
+    }
+    setMessages((prev) => [...res.rows.filter((r) => !prev.some((p) => p.id === r.id)), ...prev]);
+    setMore({ has: res.hasMore, cursor: res.next, loading: false });
+  }
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const target = highlightId ? initial.find((m) => m.id === highlightId) : undefined;
   const [open, setOpen] = useState<Set<string>>(new Set(target?.parent_id ? [target.parent_id] : []));
@@ -52,7 +71,7 @@ export function ChannelChat({
   const endRef = useRef<HTMLDivElement>(null);
   const readTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => setMessages(initial), [initial]);
+  useEffect(() => setMessages((prev) => [...prev.filter((p) => !initial.some((i) => i.id === p.id) && p.created_at < (initial[0]?.created_at ?? "~")), ...initial]), [initial]);
 
   const markRead = useCallback(() => {
     if (readTimer.current) clearTimeout(readTimer.current);
@@ -187,6 +206,13 @@ export function ChannelChat({
         </div>
       )}
       <ol className="max-h-[60vh] space-y-4 overflow-y-auto p-4" aria-live="polite">
+        {more.has && (
+          <li className="text-center">
+            <Button type="button" variant="outline" disabled={more.loading} onClick={() => void loadEarlier()}>
+              {more.loading ? "Loading…" : "Load earlier messages"}
+            </Button>
+          </li>
+        )}
         {top.length === 0 && <li className="py-8 text-center text-sm text-muted-foreground">No messages yet. Say hello 👋</li>}
         {top.map((m) => (
           <li key={m.id}>

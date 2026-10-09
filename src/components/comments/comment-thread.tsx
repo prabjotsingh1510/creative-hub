@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { Paperclip, Pin, PinOff, Send, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { addComment, setPinned } from "@/actions/comments";
+import { loadEarlierComments } from "@/actions/pagination";
+import type { Cursor } from "@/lib/cursor";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { uploadAttachment } from "@/lib/upload";
@@ -23,6 +25,8 @@ export function CommentThread({
   versions,
   initial,
   highlightId,
+  hasEarlier = false,
+  earlierCursor = null,
 }: {
   creativeId: string;
   me: Profile;
@@ -30,8 +34,23 @@ export function CommentThread({
   versions: { id: string; version_no: number }[];
   initial: ThreadComment[];
   highlightId?: string;
+  hasEarlier?: boolean;
+  earlierCursor?: Cursor | null;
 }) {
   const [comments, setComments] = useState<ThreadComment[]>(initial);
+  const [more, setMore] = useState({ has: hasEarlier, cursor: earlierCursor, loading: false });
+  const loadEarlier = async () => {
+    if (!more.cursor || more.loading) return;
+    setMore((m) => ({ ...m, loading: true }));
+    const res = await loadEarlierComments(creativeId, more.cursor);
+    if (!res.ok) {
+      toast.error(res.error);
+      setMore((m) => ({ ...m, loading: false }));
+      return;
+    }
+    setComments((prev) => [...res.rows, ...prev.filter((p) => !res.rows.some((r) => r.id === p.id))]);
+    setMore({ has: res.hasMore, cursor: res.next, loading: false });
+  };
   const [body, setBody] = useState("");
   const [versionId, setVersionId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -44,7 +63,8 @@ export function CommentThread({
   const versionNo = useMemo(() => new Map(versions.map((v) => [v.id, v.version_no])), [versions]);
 
   // Keep in sync with server-rendered data after router.refresh().
-  useEffect(() => setComments(initial), [initial]);
+  // After router.refresh() keep any older pages already loaded; replace the newest page.
+  useEffect(() => setComments((prev) => [...prev.filter((p) => !initial.some((i) => i.id === p.id) && p.created_at < (initial[0]?.created_at ?? "~")), ...initial]), [initial]);
 
   // Realtime: new comments / pin changes. Attachments arrive via refetch.
   useEffect(() => {
@@ -179,6 +199,13 @@ export function CommentThread({
       )}
 
       <ol className="max-h-[60vh] space-y-4 overflow-y-auto p-4 lg:max-h-[560px]" aria-live="polite">
+        {more.has && (
+          <li className="text-center">
+            <Button type="button" variant="outline" disabled={more.loading} onClick={() => void loadEarlier()}>
+              {more.loading ? "Loading…" : "Load earlier messages"}
+            </Button>
+          </li>
+        )}
         {comments.length === 0 && <li className="text-sm text-muted-foreground">No messages yet. Start the conversation.</li>}
         {comments.map((c) => {
           const author = byId.get(c.author_id);

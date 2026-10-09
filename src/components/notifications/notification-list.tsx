@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { markAllRead, markRead } from "@/actions/notifications";
+import { loadMoreNotifications } from "@/actions/pagination";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { describeNotification, notificationHref, type NotificationRow } from "@/lib/notifications";
@@ -12,16 +13,33 @@ import { cn } from "@/lib/utils";
 
 export function NotificationList({
   initial,
+  hasMore: initialHasMore,
   names,
   unreadOnly,
 }: {
   initial: NotificationRow[];
+  hasMore: boolean;
   names: Record<string, string>;
   unreadOnly: boolean;
 }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
-  useEffect(() => setItems(initial), [initial]);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    setItems(initial);
+    setHasMore(initialHasMore);
+  }, [initial, initialHasMore]);
+  async function more() {
+    const last = items[items.length - 1];
+    if (!last || loading) return;
+    setLoading(true);
+    const res = await loadMoreNotifications({ t: last.created_at, id: last.id }, unreadOnly);
+    setLoading(false);
+    if (!res.ok) return;
+    setItems((p) => [...p, ...res.rows.filter((r) => !p.some((x) => x.id === r.id))]);
+    setHasMore(res.hasMore);
+  }
 
   // New notifications appear live without a refresh.
   useEffect(() => {
@@ -83,6 +101,11 @@ export function NotificationList({
             </li>
           ))}
         </ul>
+      )}
+      {hasMore && (
+        <Button variant="outline" className="w-full" disabled={loading} onClick={() => void more()}>
+          {loading ? "Loading…" : "Load older"}
+        </Button>
       )}
     </>
   );
