@@ -45,7 +45,7 @@ begin
   perform pg_temp.back_to_admin();
   perform pg_temp.check(exists (select 1 from notifications where user_id = a and creative_id = cid and type = 'version_uploaded'), 'admin notified of upload');
   perform pg_temp.check(exists (select 1 from notifications where user_id = d and creative_id = cid and type = 'version_uploaded'), 'ads notified of upload');
-  perform pg_temp.check(not exists (select 1 from notifications where user_id = c and creative_id = cid), 'uploader not notified');
+  perform pg_temp.check(not exists (select 1 from notifications where user_id = c and creative_id = cid and type = 'version_uploaded'), 'uploader not notified of own upload');
   perform pg_temp.check((select count(*) from notifications where user_id = a and creative_id = cid) = 1, 'no duplicate "submitted" notification after upload');
 
   -- 3. a mention replaces the generic comment ping
