@@ -8,7 +8,7 @@ One source of truth for Meta ad creatives: versions, discussion, dates and live 
 
 1. **Create a Supabase project** (supabase.com). Free tier is fine (50 MB file cap).
 2. **Run the migrations** in order in the Supabase SQL editor (or `supabase db push` with the CLI):
-   `0001_schema.sql`, `0002_functions_triggers.sql`, `0003_rls_storage.sql` (Phase 1), then `0004_activity_and_policies.sql`, `0005_notifications.sql`, `0006_channels.sql`, `0007_search_filters.sql` (Phase 2). Run each file once, in order, in `supabase/migrations/`.
+   `0001_schema.sql`, `0002_functions_triggers.sql`, `0003_rls_storage.sql` (Phase 1), then `0004_activity_and_policies.sql`, `0005_notifications.sql`, `0006_channels.sql`, `0007_search_filters.sql`, `0008_fix_creative_upload.sql` (Phase 2; 0008 fixes creative-role uploads). Run each file once, in order, in `supabase/migrations/`.
 3. **Auth settings**: turn OFF "Allow new users to sign up" (Authentication → Sign In / Providers) – roles come from invite metadata, so open sign-up would let anyone pick a role. Then (Authentication → URL Configuration): set Site URL to your app URL and add `<app>/auth/confirm` to redirect URLs.
    The default invite email works as-is (links land on `/set-password`), so no template editing is needed. Also add `<app>/set-password` to the redirect URLs.
 4. **Env vars**: `cp .env.example .env.local` and fill in URL, anon key, service-role key (Project settings → API). The service-role key is server-only.
