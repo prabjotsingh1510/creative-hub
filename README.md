@@ -150,3 +150,17 @@ Turn off "Confirm email" is not needed (users are created pre-confirmed). Never 
 - The board shows up to 300 matches; the list loads 24 at a time.
 - Messages deep-linked from a notification only scroll into view if they are within the loaded page (use "Load earlier").
 - CSP is report-only; 9 `npm audit` advisories need a Next 16 upgrade (see `docs/SECURITY.md`).
+
+### Verified results (test project, production build)
+- **Unit + RLS:** 59 tests pass (34 unit, 25 role-permission tests against a real database). `npm run check` is green.
+- **Browser (Playwright):** 38 tests pass: the full workflow (request -> upload -> approve -> sent to ads -> live), board permissions, timeline, phone checks at 360 and 390 px (no horizontal scroll, 44 px tap targets, board column switcher), and axe accessibility scans in light + dark mode on desktop and phone (no serious/critical violations).
+- **Lighthouse (mobile, simulated slow 4G / 4x CPU, 80 creatives, detail page with 120 comments):**
+
+| Page | Phase 2 perf / LCP / TBT | Phase 3 perf / LCP / TBT |
+|---|---|---|
+| Login | 97 / 2.47 s / 106 ms | 100 / 1.82 s / 58 ms |
+| Dashboard | 96 / 2.61 s / 91 ms | 98 / 2.04 s / 135 ms |
+| Creatives (grid) | 96 / 2.65 s / 105 ms | 99 / 1.98 s / 91 ms |
+| Creative detail | 96 / 2.62 s / 83 ms | 97 / 2.41 s / 82 ms |
+
+CLS is 0 on every page; accessibility and best-practices scores are 100. (The Phase 2 build had no board view, so its board row is omitted.) `scripts/seed-perf.mjs` adds the bulk data to a test project.
