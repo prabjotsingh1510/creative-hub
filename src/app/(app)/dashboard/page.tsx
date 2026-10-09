@@ -156,7 +156,7 @@ function Stat({ label, value, href, tone }: { label: string; value: number; href
 
 function Panel({ title, hint, count, children }: { title: string; hint?: string; count?: number; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border bg-card">
+    <section className="min-w-0 rounded-xl border bg-card">
       <header className="flex items-baseline gap-2 border-b px-4 py-3">
         <h2 className="text-sm font-semibold">{title}</h2>
         {count !== undefined && <span className="rounded-full bg-muted px-2 text-xs tabular-nums">{count}</span>}
