@@ -12,16 +12,17 @@ import { cn } from "@/lib/utils";
 
 export function NotificationBell({
   userId,
-  initialUnread,
+  unread,
+  setUnread,
   names,
 }: {
   userId: string;
-  initialUnread: number;
+  unread: number;
+  setUnread: React.Dispatch<React.SetStateAction<number>>;
   names: Record<string, string>;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(initialUnread);
   const [items, setItems] = useState<NotificationRow[] | null>(null);
   const panel = useRef<HTMLDivElement>(null);
 
@@ -33,7 +34,7 @@ export function NotificationBell({
     ]);
     setUnread(count ?? 0);
     setItems((data ?? []) as NotificationRow[]);
-  }, []);
+  }, [setUnread]);
 
   // Realtime: any change to my notifications re-syncs the count and list.
   useEffect(() => {
@@ -91,7 +92,7 @@ export function NotificationBell({
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((o) => !o)}
-        className="relative inline-flex size-8 items-center justify-center rounded-lg hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+        className="relative inline-flex size-10 items-center justify-center md:size-8 rounded-lg hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
       >
         <Bell className="size-4" />
         {unread > 0 && (

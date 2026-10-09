@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ExternalLink } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   setDeleted,
   setStatus,
@@ -49,14 +50,27 @@ function useSave() {
   return { pending, run };
 }
 
-function Section({ title, children, hint }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({ title, children, hint, defaultOpenOnPhone = false }: { title: string; hint?: string; defaultOpenOnPhone?: boolean; children: React.ReactNode }) {
+  // Always open on desktop (CSS); on phones sections start collapsed except where noted.
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (!defaultOpenOnPhone && !window.matchMedia("(min-width: 1024px)").matches) setOpen(false);
+  }, [defaultOpenOnPhone]);
   return (
-    <section className="space-y-3 rounded-xl border bg-card p-4">
-      <div>
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-      </div>
-      {children}
+    <section className="rounded-xl border bg-card">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex min-h-12 w-full items-center justify-between gap-2 px-4 py-3 text-left lg:pointer-events-none lg:min-h-0 lg:pb-0"
+      >
+        <span>
+          <span className="block text-sm font-semibold">{title}</span>
+          {hint && <span className="block text-xs font-normal text-muted-foreground">{hint}</span>}
+        </span>
+        <ChevronDown className={cn("size-4 shrink-0 transition-transform lg:hidden", open && "rotate-180")} aria-hidden />
+      </button>
+      <div className={cn("space-y-3 px-4 pb-4 pt-3", !open && "hidden lg:block")}>{children}</div>
     </section>
   );
 }
@@ -98,7 +112,7 @@ function StatusSection({ c, role }: { c: Creative; role: Role }) {
   const router = useRouter();
   const { pending, run } = useSave();
   return (
-    <Section title="Status">
+    <Section title="Status" defaultOpenOnPhone>
       <GoLiveDialog
         open={liveOpen}
         onOpenChange={setLiveOpen}

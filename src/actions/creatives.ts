@@ -5,6 +5,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { emailSoon } from "@/lib/email/soon";
 import { canTransition } from "@/lib/workflow";
+import { rateLimit } from "@/lib/rate-limit";
+import { verifyStoredObject } from "@/lib/upload-verify";
 import type { Role, Status } from "@/lib/types";
 import {
   adsFieldsSchema,
@@ -190,11 +192,18 @@ export async function registerVersion(input: {
   if (problem) return fail(problem);
   if (!input.filePath.startsWith(`${input.creativeId}/`)) return fail("Invalid file path");
   if (input.thumbPath && !input.thumbPath.startsWith(`${input.creativeId}/`)) return fail("Invalid file path");
+  const limited = await rateLimit("upload", 20, 600);
+  if (limited) return fail(limited);
+  const unsafe = await verifyStoredObject(input.filePath, input.mime);
+  if (unsafe) return fail(unsafe);
+  // The thumbnail is optional: drop it (and delete it) if it isn't a real image.
+  let thumbPath = input.thumbPath;
+  if (thumbPath && (await verifyStoredObject(thumbPath, "image/webp"))) thumbPath = null;
   const supabase = await createClient();
   const { error } = await supabase.rpc("add_creative_version", {
     p_creative: input.creativeId,
     p_file_path: input.filePath,
-    p_thumb_path: input.thumbPath,
+    p_thumb_path: thumbPath,
     p_mime: input.mime,
     p_size: input.size,
   });

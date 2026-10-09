@@ -1,14 +1,14 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Expand, Film, Upload } from "lucide-react";
+import { Expand, Film, Play, RotateCcw, Upload } from "lucide-react";
 import { registerVersion } from "@/actions/creatives";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Lightbox } from "@/components/creatives/lightbox";
 import { canUpload } from "@/lib/permissions";
-import { uploadWithThumb } from "@/lib/upload";
+import { forgetUpload, uploadWithThumb } from "@/lib/upload";
 import { validateCreativeFile } from "@/lib/validators";
 import { formatIST } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,8 @@ export function VersionViewer({
   const input = useRef<HTMLInputElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(currentVersionId ?? versions[0]?.id ?? null);
   const [lightbox, setLightbox] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [playing, setPlaying] = useState<string | null>(null); // video loads only after a tap
+  const [upload, setUpload] = useState<{ file: File; percent: number; state: "uploading" | "failed" | "saving"; error?: string } | null>(null);
   const [, startTransition] = useTransition();
 
   // Follow the newest version after an upload refresh.
@@ -43,32 +44,43 @@ export function VersionViewer({
 
   const selected = versions.find((v) => v.id === selectedId) ?? versions[0];
   const isVideo = selected?.mime.startsWith("video/");
+  const images = useMemo(
+    () => versions.filter((v) => v.mime.startsWith("image/") && v.fileUrl).map((v) => ({ id: v.id, url: v.fileUrl!, label: `v${v.version_no}` })),
+    [versions],
+  );
+  const lightboxIndex = Math.max(0, images.findIndex((i) => i.id === selected?.id));
+  const [lbIndex, setLbIndex] = useState(0);
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function run(file: File) {
+    setUpload({ file, percent: 0, state: "uploading" });
+    try {
+      const { file_path, thumb_path } = await uploadWithThumb(creativeId, file, (percent) =>
+        setUpload((u) => (u ? { ...u, percent } : u)),
+      );
+      setUpload((u) => (u ? { ...u, percent: 100, state: "saving" } : u));
+      const res = await registerVersion({ creativeId, filePath: file_path, thumbPath: thumb_path, mime: file.type, size: file.size });
+      if (!res.ok) throw new Error(res.error);
+      toast.success("New version uploaded");
+      forgetUpload(file);
+      setUpload(null);
+      startTransition(() => router.refresh());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setUpload((u) => (u ? { ...u, state: "failed", error: message } : u));
+      toast.error(message);
+    }
+  }
+
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     const problem = validateCreativeFile(file);
-    if (problem) return toast.error(problem);
-    setUploading(true);
-    try {
-      const { file_path, thumb_path } = await uploadWithThumb(creativeId, file);
-      const res = await registerVersion({
-        creativeId,
-        filePath: file_path,
-        thumbPath: thumb_path,
-        mime: file.type,
-        size: file.size,
-      });
-      if (!res.ok) throw new Error(res.error);
-      toast.success("New version uploaded");
-      startTransition(() => router.refresh());
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    if (problem) return void toast.error(problem);
+    void run(file);
   }
+
+  const busy = upload?.state === "uploading" || upload?.state === "saving";
 
   return (
     <section aria-label="Preview and versions" className="space-y-3">
@@ -79,25 +91,34 @@ export function VersionViewer({
             No file uploaded yet.
           </div>
         ) : isVideo ? (
-          <video
-            key={selected.id}
-            src={selected.fileUrl}
-            poster={selected.thumbUrl}
-            controls
-            playsInline
-            preload="metadata"
-            className="max-h-[70vh] w-full bg-black"
-          />
+          playing === selected.id ? (
+            <video key={selected.id} src={selected.fileUrl} poster={selected.thumbUrl} controls autoPlay playsInline preload="auto" className="max-h-[70vh] w-full bg-black" />
+          ) : (
+            <button type="button" onClick={() => setPlaying(selected.id)} aria-label={`Play version ${selected.version_no}`} className="group relative block aspect-video w-full bg-black outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              {selected.thumbUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={selected.thumbUrl} alt="" decoding="async" className="size-full object-contain" />
+              )}
+              <span className="absolute inset-0 flex items-center justify-center">
+                <span className="flex size-16 items-center justify-center rounded-full bg-white/90 text-black shadow-lg transition-transform group-hover:scale-105">
+                  <Play className="size-7" aria-hidden />
+                </span>
+              </span>
+            </button>
+          )
         ) : (
           <button
             type="button"
-            onClick={() => setLightbox(true)}
+            onClick={() => {
+              setLbIndex(lightboxIndex);
+              setLightbox(true);
+            }}
             className="group relative block w-full cursor-zoom-in outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             aria-label="Open full-size preview"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={selected.fileUrl} alt={`Version ${selected.version_no}`} className="mx-auto max-h-[70vh] w-auto object-contain" />
-            <Expand className="absolute right-3 top-3 size-5 rounded bg-black/50 p-1 text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100" />
+            <img src={selected.fileUrl} alt={`Version ${selected.version_no}`} decoding="async" className="mx-auto max-h-[70vh] w-auto object-contain" />
+            <Expand className="absolute right-3 top-3 size-8 rounded bg-black/50 p-1.5 text-white opacity-80 transition group-hover:opacity-100" aria-hidden />
           </button>
         )}
       </div>
@@ -106,19 +127,38 @@ export function VersionViewer({
         <h2 className="text-sm font-semibold">Versions</h2>
         {canUpload(role) && (
           <>
-            <input
-              ref={input}
-              type="file"
-              hidden
-              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm"
-              onChange={onFile}
-            />
-            <Button className="ml-auto" size="lg" disabled={uploading} onClick={() => input.current?.click()}>
-              <Upload /> {uploading ? "Uploading…" : versions.length ? "Upload new version" : "Upload creative"}
+            <input ref={input} type="file" hidden accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,image/*,video/*" onChange={onFile} />
+            <Button className="ml-auto h-11 px-4" disabled={busy} onClick={() => input.current?.click()}>
+              <Upload /> {busy ? "Uploading…" : versions.length ? "Upload new version" : "Upload creative"}
             </Button>
           </>
         )}
       </div>
+
+      {upload && (
+        <div className="space-y-1.5 rounded-lg border p-3 text-sm" role="status" aria-live="polite">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate">{upload.file.name}</span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">
+              {upload.state === "saving" ? "Saving…" : upload.state === "failed" ? "Failed" : `${upload.percent}%`}
+            </span>
+          </div>
+          <progress className="h-2 w-full overflow-hidden rounded [&::-moz-progress-bar]:bg-foreground [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-foreground" value={upload.percent} max={100} aria-label="Upload progress" />
+          {upload.state === "failed" && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-destructive">{upload.error}</span>
+              <div className="flex shrink-0 gap-2">
+                <Button variant="outline" onClick={() => void run(upload.file)}>
+                  <RotateCcw /> Retry
+                </Button>
+                <Button variant="ghost" onClick={() => setUpload(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {versions.length > 0 && (
         <ul className="flex gap-2 overflow-x-auto pb-1">
@@ -128,15 +168,12 @@ export function VersionViewer({
                 type="button"
                 onClick={() => setSelectedId(v.id)}
                 aria-pressed={v.id === selected?.id}
-                className={cn(
-                  "w-28 overflow-hidden rounded-lg border text-left text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  v.id === selected?.id && "border-foreground",
-                )}
+                className={cn("w-28 overflow-hidden rounded-lg border text-left text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50", v.id === selected?.id && "border-foreground")}
               >
                 <span className="flex aspect-[4/3] items-center justify-center bg-muted">
                   {v.thumbUrl || (v.mime.startsWith("image/") && v.fileUrl) ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={v.thumbUrl ?? v.fileUrl} alt="" className="size-full object-cover" />
+                    <img src={v.thumbUrl ?? v.fileUrl} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
                   ) : (
                     <Film className="size-5 text-muted-foreground" aria-hidden />
                   )}
@@ -152,13 +189,7 @@ export function VersionViewer({
         </ul>
       )}
 
-      <Dialog open={lightbox} onOpenChange={setLightbox}>
-        <DialogContent className="max-w-[95vw] sm:max-w-5xl">
-          <DialogTitle className="sr-only">Version {selected?.version_no} preview</DialogTitle>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {selected && <img src={selected.fileUrl} alt={`Version ${selected.version_no}`} className="max-h-[80vh] w-full object-contain" />}
-        </DialogContent>
-      </Dialog>
+      <Lightbox items={images} index={lbIndex} open={lightbox} onOpenChange={setLightbox} onIndexChange={setLbIndex} />
     </section>
   );
 }

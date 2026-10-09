@@ -9,6 +9,7 @@ import { DetailsPanel } from "@/components/creatives/details-panel";
 import { CommentThread } from "@/components/comments/comment-thread";
 import { ActivityLog } from "@/components/creatives/activity-log";
 import { DetailTabs } from "@/components/creatives/detail-tabs";
+import { MobileActionBar } from "@/components/creatives/mobile-action-bar";
 import type {
   ActivityRow,
   CommentAttachment,
@@ -63,6 +64,8 @@ export default async function CreativePage({
         <LiveBadge state={c.live_state} />
         <TimelinessBadge due={c.due_date} submittedAt={c.submitted_at} />
       </div>
+
+      <MobileActionBar creative={c} role={profile.role} />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <VersionViewer

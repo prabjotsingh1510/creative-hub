@@ -164,7 +164,7 @@ export function CommentThread({
   }
 
   return (
-    <section aria-labelledby="discussion-h" className="flex flex-col rounded-xl border bg-card">
+    <section aria-labelledby="discussion-h" className="flex flex-col rounded-xl border bg-card pb-40 lg:pb-0">
       <h2 id="discussion-h" className="border-b px-4 py-3 text-sm font-semibold">Discussion</h2>
 
       {pinned.length > 0 && (
@@ -178,7 +178,7 @@ export function CommentThread({
         </div>
       )}
 
-      <ol className="max-h-[560px] space-y-4 overflow-y-auto p-4" aria-live="polite">
+      <ol className="max-h-[60vh] space-y-4 overflow-y-auto p-4 lg:max-h-[560px]" aria-live="polite">
         {comments.length === 0 && <li className="text-sm text-muted-foreground">No messages yet. Start the conversation.</li>}
         {comments.map((c) => {
           const author = byId.get(c.author_id);
@@ -224,7 +224,7 @@ export function CommentThread({
       </ol>
 
       <form
-        className="relative space-y-2 border-t p-3"
+        className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 space-y-2 border-t bg-background p-3 lg:static lg:bottom-auto lg:z-auto"
         onSubmit={(e) => {
           e.preventDefault();
           send();
@@ -253,6 +253,7 @@ export function CommentThread({
           </ul>
         )}
         <Textarea
+          id="comment-composer"
           aria-label="Write a message"
           placeholder="Write a message… use @ to mention"
           rows={2}

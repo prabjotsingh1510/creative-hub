@@ -23,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         initialUnread={count ?? 0}
         initialGeneralUnread={generalUnread}
       />
-      <main className="mx-auto w-full max-w-7xl p-4 md:p-6">{children}</main>
+      <main id="main" className="mx-auto w-full max-w-7xl p-4 md:p-6">{children}</main>
     </div>
   );
 }

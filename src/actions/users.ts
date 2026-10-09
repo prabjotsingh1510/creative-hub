@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inviteSchema } from "@/lib/validators";
+import { rateLimit } from "@/lib/rate-limit";
 import type { Result } from "./creatives";
 
 async function assertAdmin() {
@@ -21,6 +22,8 @@ export async function inviteUser(input: z.input<typeof inviteSchema>): Promise<R
   const parsed = inviteSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   if (!(await assertAdmin())) return { ok: false, error: "Admins only" };
+  const limited = await rateLimit("invite", 20, 3600);
+  if (limited) return { ok: false, error: limited };
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const { email, name, role, team } = parsed.data;
   const { error } = await createAdminClient().auth.admin.inviteUserByEmail(email, {

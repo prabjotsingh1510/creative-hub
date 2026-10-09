@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, ImageIcon, LayoutDashboard, LogOut, MessageSquare, Settings, Users } from "lucide-react";
+import { Activity, Bell, ImageIcon, LayoutDashboard, LogOut, MessageSquare, Settings, UserCircle, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notifications/bell";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
@@ -29,6 +28,9 @@ export function AppNav({
   const path = usePathname();
   const router = useRouter();
   const [generalUnread, setGeneralUnread] = useState(initialGeneralUnread);
+  const [unread, setUnread] = useState(initialUnread);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const inChannels = path.startsWith("/channels");
 
   // Unread dot for the General channel: bump on others' messages while elsewhere; clear when viewing.
@@ -46,22 +48,31 @@ export function AppNav({
       })
       .subscribe();
     return () => {
-      supabase.removeChannel(ch);
+      void supabase.removeChannel(ch);
     };
   }, [userId]);
 
-  const items = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, badge: 0 },
-    { href: "/creatives", label: "Creatives", icon: ImageIcon, badge: 0 },
-    { href: "/channels/general", label: "General", icon: MessageSquare, badge: generalUnread, match: "/channels" },
-    ...(role === "admin"
-      ? [
-          { href: "/admin/activity", label: "Activity", icon: Activity, badge: 0 },
-          { href: "/admin/users", label: "Users", icon: Users, badge: 0 },
-        ]
-      : []),
+  useEffect(() => setMenuOpen(false), [path]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => menuRef.current && !menuRef.current.contains(e.target as Node) && setMenuOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  const main = [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, dot: false, match: "/dashboard" },
+    { href: "/creatives", label: "Creatives", icon: ImageIcon, dot: false, match: "/creatives" },
+    { href: "/channels/general", label: "General", icon: MessageSquare, dot: generalUnread > 0, match: "/channels" },
   ];
-  const active = (i: { href: string; match?: string }) => path.startsWith(i.match ?? i.href);
+  const mobile = [...main, { href: "/notifications", label: "Alerts", icon: Bell, dot: unread > 0, match: "/notifications" }];
+  const adminLinks = role === "admin" ? [{ href: "/admin/activity", label: "Activity log", icon: Activity }, { href: "/admin/users", label: "Users", icon: Users }] : [];
+  const active = (match: string) => path.startsWith(match);
 
   async function signOut() {
     await createClient().auth.signOut();
@@ -71,54 +82,75 @@ export function AppNav({
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:ring-2 focus:ring-ring">
+        Skip to content
+      </a>
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur md:px-4">
         <Link href="/dashboard" className="font-semibold tracking-tight">
           Creative Hub
         </Link>
         <nav className="ml-4 hidden gap-1 md:flex" aria-label="Main">
-          {items.map((i) => (
+          {[...main, ...adminLinks.map((l) => ({ ...l, dot: false, match: l.href }))].map((i) => (
             <Link
               key={i.href}
               href={i.href}
-              className={cn(
-                "relative rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground",
-                active(i) && "bg-muted text-foreground",
-              )}
+              aria-current={active(i.match) ? "page" : undefined}
+              className={cn("relative rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground", active(i.match) && "bg-muted text-foreground")}
             >
               {i.label}
-              {i.badge > 0 && <span aria-label="unread messages" className="absolute right-1 top-1 size-2 rounded-full bg-blue-500" />}
+              {i.dot && <span className="absolute right-1 top-1 size-2 rounded-full bg-blue-500"><span className="sr-only">unread</span></span>}
             </Link>
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-1">
-          <span className="hidden text-right text-xs leading-tight sm:block">
-            <span className="block font-medium">{name}</span>
-            <span className="text-muted-foreground">{ROLE_LABEL[role]}</span>
-          </span>
-          <NotificationBell userId={userId} initialUnread={initialUnread} names={names} />
-          <Link href="/settings/notifications" aria-label="Notification settings" className="inline-flex size-8 items-center justify-center rounded-lg hover:bg-muted">
-            <Settings className="size-4" />
-          </Link>
-          <ThemeToggle />
-          <Button variant="ghost" size="icon" aria-label="Sign out" onClick={signOut}>
-            <LogOut className="size-4" />
-          </Button>
+          <NotificationBell userId={userId} unread={unread} setUnread={setUnread} names={names} />
+          <div ref={menuRef} className="relative">
+            <button
+              type="button"
+              aria-label="Account menu"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              onClick={() => setMenuOpen((o) => !o)}
+              className="inline-flex size-10 items-center justify-center rounded-lg hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 outline-none md:size-8"
+            >
+              <UserCircle className="size-5" />
+            </button>
+            {menuOpen && (
+              <div role="menu" className="absolute right-0 top-11 z-50 w-60 rounded-xl border bg-popover p-1 shadow-lg">
+                <div className="px-3 py-2">
+                  <div className="text-sm font-medium">{name}</div>
+                  <div className="text-xs text-muted-foreground">{ROLE_LABEL[role]}</div>
+                </div>
+                <hr className="my-1" />
+                {[...adminLinks, { href: "/settings/notifications", label: "Notification settings", icon: Settings }].map((l) => (
+                  <Link key={l.href} role="menuitem" href={l.href} className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-muted">
+                    <l.icon className="size-4" aria-hidden /> {l.label}
+                  </Link>
+                ))}
+                <div className="flex items-center justify-between rounded-md px-3 py-1 text-sm">
+                  Theme <ThemeToggle />
+                </div>
+                <button role="menuitem" type="button" onClick={signOut} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-muted">
+                  <LogOut className="size-4" aria-hidden /> Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
-      {/* Mobile bottom nav: thumb reachable */}
-      <nav
-        aria-label="Main"
-        className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
-      >
-        {items.slice(0, 5).map((i) => (
+
+      {/* Mobile bottom nav: thumb reachable, 4 tabs */}
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        {mobile.map((i) => (
           <Link
             key={i.href}
             href={i.href}
-            className={cn("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-muted-foreground", active(i) && "text-foreground")}
+            aria-current={active(i.match) ? "page" : undefined}
+            className={cn("relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground", active(i.match) && "text-foreground")}
           >
-            <i.icon className="size-5" />
+            <i.icon className="size-5" aria-hidden />
             {i.label}
-            {i.badge > 0 && <span aria-label="unread messages" className="absolute right-[30%] top-1.5 size-2 rounded-full bg-blue-500" />}
+            {i.dot && <span className="absolute right-[28%] top-2 size-2 rounded-full bg-blue-500"><span className="sr-only">unread</span></span>}
           </Link>
         ))}
       </nav>

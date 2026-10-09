@@ -4,6 +4,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { validateAttachment } from "@/lib/validators";
 import { emailSoon } from "@/lib/email/soon";
+import { rateLimit } from "@/lib/rate-limit";
+import { verifyStoredObject } from "@/lib/upload-verify";
 import type { Result } from "./creatives";
 
 const schema = z.object({
@@ -25,6 +27,13 @@ export async function postMessage(input: z.input<typeof schema>): Promise<Result
     if (bad) return { ok: false, error: bad };
     if (!a.path.startsWith(`channels/${channelId}/`)) return { ok: false, error: "Invalid attachment path" };
   }
+  const limited = await rateLimit("message", 30, 60);
+  if (limited) return { ok: false, error: limited };
+  for (const a of attachments) {
+    const unsafe = await verifyStoredObject(a.path, a.mime);
+    if (unsafe) return { ok: false, error: `${a.name}: ${unsafe}` };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
