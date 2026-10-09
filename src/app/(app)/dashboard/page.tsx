@@ -70,7 +70,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Hi {profile.name.split(" ")[0]}</h1>
+      <h1 className="text-xl font-semibold">
+        {profile.role === "ads"
+          ? `Hey ${profile.name.split(" ")[0]}, Ready to take ads live?`
+          : `Hi ${profile.name.split(" ")[0]}`}
+      </h1>
 
       <section aria-label="Summary" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <Stat label="Overdue" value={overdue.length} href="/creatives?timing=overdue&sort=due" tone={overdue.length ? "bad" : undefined} />
