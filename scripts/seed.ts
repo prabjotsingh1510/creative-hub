@@ -38,6 +38,58 @@ async function ensureUser(u: (typeof USERS)[number]) {
   return data.user.id;
 }
 
+/** Phase 2 sample data: activity timeline, notifications and General channel messages. */
+async function seedPhase2(ids: Record<string, string>) {
+  const { data: creatives } = await supabase.from("creatives").select("id, title").order("created_at").limit(3);
+  const first = creatives?.[0];
+
+  if (first) {
+    const { count } = await supabase.from("activity_log").select("id", { count: "exact", head: true }).eq("creative_id", first.id).eq("action", "field_changed");
+    if (!count) {
+      const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+      const { error } = await supabase.from("activity_log").insert([
+        { creative_id: first.id, actor_id: ids.admin, action: "field_changed", from_value: "2026-10-20", to_value: "2026-10-24", meta: { field: "due_date" }, created_at: ago(30) },
+        { creative_id: first.id, actor_id: ids.creative, action: "comment", meta: {}, created_at: ago(20) },
+        { creative_id: first.id, actor_id: ids.admin, action: "pinned", meta: {}, created_at: ago(19) },
+      ]);
+      if (error) throw error;
+    }
+  }
+
+  const { count: notifCount } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("type", "mention");
+  if (!notifCount && first) {
+    const { error } = await supabase.from("notifications").insert([
+      { user_id: ids.creative, type: "mention", creative_id: first.id, actor_id: ids.admin, payload: { title: first.title, snippet: "Can we try a warmer palette?" }, email_status: "skipped" },
+      { user_id: ids.ads, type: "status_changed", creative_id: first.id, actor_id: ids.admin, payload: { title: first.title, from: "approved", to: "sent_to_ads" }, email_status: "skipped" },
+      { user_id: ids.admin, type: "due_soon", creative_id: first.id, payload: { title: first.title, due_date: new Date().toISOString().slice(0, 10) }, email_status: "skipped" },
+    ]);
+    if (error) throw error;
+  }
+
+  const { data: general } = await supabase.from("channels").select("id").eq("slug", "general").single();
+  if (general) {
+    const { count: msgCount } = await supabase.from("messages").select("id", { count: "exact", head: true }).eq("channel_id", general.id);
+    if (!msgCount) {
+      const { data: top, error } = await supabase
+        .from("messages")
+        .insert([
+          { channel_id: general.id, author_id: ids.admin, body: "Welcome to Creative Hub! Please use creative threads for feedback and this channel for everything else.", pinned: true },
+          { channel_id: general.id, author_id: ids.ads, body: "Quick question: what is the preferred max video length for Reels?" },
+        ])
+        .select("id");
+      if (error) throw error;
+      const { error: e2 } = await supabase.from("messages").insert({
+        channel_id: general.id,
+        author_id: ids.creative,
+        parent_id: top![1].id,
+        body: "15 seconds works best for us. Anything longer, send a Drive link.",
+      });
+      if (e2) throw e2;
+    }
+  }
+  console.log("Seeded sample activity, notifications and General messages.");
+}
+
 async function main() {
   const ids: Record<string, string> = {};
   for (const u of USERS) ids[u.role] = await ensureUser(u);
