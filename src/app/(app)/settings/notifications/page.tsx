@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/session";
+import { PushToggle } from "@/components/notifications/push-toggle";
+import { pushConfigured } from "@/lib/push/dispatch";
 import { PreferencesForm } from "@/components/notifications/preferences-form";
 import { NOTIFICATION_TYPES, defaultEmailPref, type NotificationType } from "@/lib/notifications";
 
@@ -23,6 +25,7 @@ export default async function NotificationSettingsPage() {
       <p className="text-sm text-muted-foreground">
         In-app notifications are always on. Choose which events should also email you. You’re never emailed about your own actions.
       </p>
+      {pushConfigured() && <PushToggle publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!} />}
       <PreferencesForm initialEmail={email} initialDigest={!!me?.daily_digest} />
     </div>
   );

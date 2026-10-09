@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dispatchPendingEmails, sendDigests } from "@/lib/email/dispatch";
+import { dispatchPendingPushes } from "@/lib/push/dispatch";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -26,8 +27,9 @@ async function run(request: NextRequest) {
   const { data: reminders, error } = await admin.rpc("generate_due_reminders");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const emails = await dispatchPendingEmails(100);
+  const pushes = await dispatchPendingPushes(100);
   const digests = await sendDigests();
-  return NextResponse.json({ reminders: reminders ?? 0, emails, digests });
+  return NextResponse.json({ reminders: reminders ?? 0, emails, pushes, digests });
 }
 
 export const GET = run;

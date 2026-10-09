@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // /set-password is public so the invite hash tokens can be exchanged client-side before a session exists.
-const PUBLIC = ["/login", "/auth", "/set-password", "/api/cron"];
+const PUBLIC = ["/login", "/auth", "/set-password", "/api/cron", "/offline", "/manifest.webmanifest", "/sw.js", "/icon", "/apple-icon"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC.some((p) => path === p || path.startsWith(p + "/"));
+  const isPublic = PUBLIC.some((p) => path === p || path.startsWith(p + "/") || path.startsWith(p + "-"));
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";

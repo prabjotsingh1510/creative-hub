@@ -7,6 +7,7 @@ import { Activity, Bell, ImageIcon, LayoutDashboard, LogOut, MessageSquare, Sett
 import { createClient } from "@/lib/supabase/client";
 import { NotificationBell } from "@/components/notifications/bell";
 import { ThemeToggle } from "./theme-toggle";
+import { InstallItem } from "@/components/pwa/install-item";
 import { cn } from "@/lib/utils";
 import { ROLE_LABEL, type Role } from "@/lib/types";
 
@@ -127,6 +128,7 @@ export function AppNav({
                     <l.icon className="size-4" aria-hidden /> {l.label}
                   </Link>
                 ))}
+                <InstallItem />
                 <div className="flex items-center justify-between rounded-md px-3 py-1 text-sm">
                   Theme <ThemeToggle />
                 </div>
