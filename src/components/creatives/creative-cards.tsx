@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Film, ImageOff, MessageSquare } from "lucide-react";
+import { RestoreButton } from "@/components/creatives/restore-button";
 import { LiveBadge, StatusBadge, TimelinessBadge } from "@/components/creatives/badges";
 import { formatDateOnly } from "@/lib/time";
 import type { CardRow } from "@/lib/creatives-data";
@@ -31,6 +32,7 @@ export function DueText({ row, className }: { row: Pick<CardRow, "due_date" | "t
 
 export function CreativeCard({ row }: { row: CardRow }) {
   return (
+    <div className="space-y-2">
     <Link
       href={`/creatives/${row.id}`}
       className="group block overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
@@ -60,6 +62,8 @@ export function CreativeCard({ row }: { row: CardRow }) {
         </p>
       </div>
     </Link>
+    {row.deleted_at && <RestoreButton id={row.id} title={row.title} />}
+    </div>
   );
 }
 
@@ -81,6 +85,7 @@ export function CreativeTableRow({ row }: { row: CardRow }) {
       <td className="p-2 whitespace-nowrap"><DueText row={row} /></td>
       <td className="p-2"><TimelinessBadge due={row.due_date} submittedAt={row.submitted_at} /></td>
       <td className="p-2"><LiveBadge state={row.live_state} /></td>
+      {row.deleted_at && <td className="p-2"><RestoreButton id={row.id} title={row.title} /></td>}
     </tr>
   );
 }

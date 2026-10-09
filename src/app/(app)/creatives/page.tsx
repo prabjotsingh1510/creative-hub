@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/session";
 import { canCreateRequest } from "@/lib/permissions";
@@ -37,8 +37,13 @@ export default async function CreativesPage({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-semibold">Creatives</h1>
+        {profile.role === "admin" && (
+          <a href="/api/admin/export" download className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted">
+            <Download className="size-4" aria-hidden /> Export CSV
+          </a>
+        )}
         {canCreateRequest(profile.role) && (
-          <Link href="/creatives/new" className="ml-auto">
+          <Link href="/creatives/new" className={profile.role === "admin" ? "" : "ml-auto"}>
             <Button size="lg"><Plus /> New request</Button>
           </Link>
         )}

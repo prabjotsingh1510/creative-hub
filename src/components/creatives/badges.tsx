@@ -17,6 +17,7 @@ const STATUS_STYLE: Record<Status, string> = {
 export function StatusBadge({ status, className }: { status: Status; className?: string }) {
   return (
     <Badge variant="secondary" className={cn("border-0", STATUS_STYLE[status], className)}>
+      <span className="sr-only">Status: </span>
       {STATUS_LABEL[status]}
     </Badge>
   );
@@ -35,6 +36,7 @@ export function LiveBadge({ state }: { state: LiveState }) {
       )}
     >
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      <span className="sr-only">Live state: </span>
       {LIVE_LABEL[state]}
     </Badge>
   );
@@ -65,6 +67,7 @@ export function TimelinessBadge({
           : "bg-red-500/15 text-red-700 dark:text-red-300",
       )}
     >
+      <span className="sr-only">Timing: </span>
       {label}
     </Badge>
   );
