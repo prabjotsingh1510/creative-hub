@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, Search, SlidersHorizontal, Table2, X } from "lucide-react";
+import { Columns3, LayoutGrid, Search, SlidersHorizontal, Table2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   SORT_LABEL,
@@ -29,12 +29,14 @@ export function FilterBar({
   campaigns,
   uploaders,
   total,
+  totalIsLowerBound,
 }: {
   filters: ListFilters;
   role: Role;
   campaigns: string[];
   uploaders: { id: string; name: string }[];
   total: number;
+  totalIsLowerBound?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -105,6 +107,9 @@ export function FilterBar({
           <Link href={href({ view: "table" })} aria-label="Table view" className={cn("rounded-md p-1.5", filters.view === "table" && "bg-muted")}>
             <Table2 className="size-4" />
           </Link>
+          <Link href={href({ view: "kanban" })} aria-label="Board view" className={cn("rounded-md p-1.5", filters.view === "kanban" && "bg-muted")}>
+            <Columns3 className="size-4" />
+          </Link>
         </div>
       </div>
 
@@ -137,7 +142,7 @@ export function FilterBar({
           </Link>
         )}
         <span className="ml-auto shrink-0 text-xs text-muted-foreground" aria-live="polite">
-          {total} result{total === 1 ? "" : "s"}
+          {total}{totalIsLowerBound ? "+" : ""} result{total === 1 && !totalIsLowerBound ? "" : "s"}
         </span>
       </div>
 

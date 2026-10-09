@@ -17,7 +17,7 @@ export interface ListFilters {
   subTo: string;
   timing: Timing | "";
   sort: SortKey;
-  view: "grid" | "table";
+  view: "grid" | "table" | "kanban";
   deleted: boolean;
 }
 
@@ -62,7 +62,7 @@ export function parseFilters(sp: Params): ListFilters {
     subTo: isDate(first(sp.subTo)) ? first(sp.subTo) : "",
     timing: ["on_time", "late", "overdue"].includes(timing) ? timing : "",
     sort: ["newest", "due", "updated", "live"].includes(sort) ? sort : "newest",
-    view: first(sp.view) === "table" ? "table" : "grid",
+    view: first(sp.view) === "table" ? "table" : first(sp.view) === "kanban" ? "kanban" : "grid",
     deleted: first(sp.deleted) === "1",
   };
 }
@@ -82,7 +82,7 @@ export function filtersToParams(f: Partial<ListFilters>): URLSearchParams {
   if (f.subTo) p.set("subTo", f.subTo);
   if (f.timing) p.set("timing", f.timing);
   if (f.sort && f.sort !== "newest") p.set("sort", f.sort);
-  if (f.view === "table") p.set("view", "table");
+  if (f.view === "table" || f.view === "kanban") p.set("view", f.view);
   if (f.deleted) p.set("deleted", "1");
   return p;
 }

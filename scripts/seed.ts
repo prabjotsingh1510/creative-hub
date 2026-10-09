@@ -109,6 +109,8 @@ async function main() {
     console.log(`Inserted ${rows.length} sample creative requests (no files; upload as the creative user).`);
   }
 
+  await seedPhase2(ids);
+
   console.log("\nDemo logins (password for all: " + PASSWORD + ")");
   USERS.forEach((u) => console.log(`  ${u.role.padEnd(9)} ${u.email}`));
 }
