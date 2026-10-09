@@ -25,7 +25,7 @@ export async function inviteUser(input: z.input<typeof inviteSchema>): Promise<R
   const { email, name, role, team } = parsed.data;
   const { error } = await createAdminClient().auth.admin.inviteUserByEmail(email, {
     data: { name, role, team },
-    redirectTo: `${site}/auth/confirm?next=/set-password`,
+    redirectTo: `${site}/set-password`,
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/users");

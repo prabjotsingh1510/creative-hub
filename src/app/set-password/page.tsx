@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,28 @@ export default function SetPasswordPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
+
+  // Default Supabase invite emails land here with tokens in the URL hash
+  // (#access_token=...&refresh_token=...). Hashes never reach the server, so exchange them here.
+  useEffect(() => {
+    const supabase = createClient();
+    (async () => {
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const access_token = hash.get("access_token");
+      const refresh_token = hash.get("refresh_token");
+      if (access_token && refresh_token) {
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+        window.history.replaceState(null, "", window.location.pathname);
+        if (error) setError("This invite link is invalid or has expired. Ask the admin to send a new one.");
+      } else if (hash.get("error_description")) {
+        setError("This invite link is invalid or has expired. Ask the admin to send a new one.");
+      }
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) setError((e) => e ?? "No active invite. Open the link from your invite email, or sign in.");
+      setReady(!!data.user);
+    })();
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,7 +61,7 @@ export default function SetPasswordPage() {
           <Input id="pw" type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="w-full" size="lg" disabled={busy}>
+        <Button type="submit" className="w-full" size="lg" disabled={busy || !ready}>
           {busy ? "Saving…" : "Save and continue"}
         </Button>
       </form>

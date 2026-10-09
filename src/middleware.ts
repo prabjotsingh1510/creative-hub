@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = ["/login", "/auth"];
+// /set-password is public so the invite hash tokens can be exchanged client-side before a session exists.
+const PUBLIC = ["/login", "/auth", "/set-password"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });

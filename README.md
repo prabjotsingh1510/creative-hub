@@ -10,9 +10,7 @@ One source of truth for Meta ad creatives: versions, discussion, dates and live 
 2. **Run the migrations** in order in the Supabase SQL editor (or `supabase db push` with the CLI):
    `supabase/migrations/0001_schema.sql`, `0002_functions_triggers.sql`, `0003_rls_storage.sql`.
 3. **Auth settings**: turn OFF "Allow new users to sign up" (Authentication → Sign In / Providers) – roles come from invite metadata, so open sign-up would let anyone pick a role. Then (Authentication → URL Configuration): set Site URL to your app URL and add `<app>/auth/confirm` to redirect URLs.
-   **Invite email template** (Authentication → Email Templates → Invite user): change the link to
-   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/set-password`
-   (This is what lets the invitee set a password.)
+   The default invite email works as-is (links land on `/set-password`), so no template editing is needed. Also add `<app>/set-password` to the redirect URLs.
 4. **Env vars**: `cp .env.example .env.local` and fill in URL, anon key, service-role key (Project settings → API). The service-role key is server-only.
 5. **First admin**: create Prabjot in Authentication → Users (Add user, auto-confirm), then in SQL:
    `update profiles set role = 'admin', name = 'Prabjot' where email = '<his email>';`

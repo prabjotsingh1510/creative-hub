@@ -131,6 +131,7 @@ function CreativeSection({ c, role }: { c: Creative; role: Role }) {
   return (
     <Section title="Creative details">
       <form
+        key={c.updated_at}
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
@@ -185,6 +186,7 @@ function DatesSection({ c, role }: { c: Creative; role: Role }) {
   return (
     <Section title="Brief & dates" hint="Admin only. Times are in IST.">
       <form
+        key={c.updated_at}
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
@@ -229,6 +231,7 @@ function AdsSection({ c, role }: { c: Creative; role: Role }) {
   return (
     <Section title="Live status (Decision Pinnacle)" hint="Went-live time auto-fills when set to Live; edit if needed.">
       <form
+        key={c.updated_at}
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
