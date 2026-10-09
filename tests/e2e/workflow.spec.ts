@@ -35,9 +35,10 @@ test.describe.serial("request -> upload -> approve -> sent to ads -> live", () =
   test("admin approves and sends to ads", async ({ browser }) => {
     const { page, context } = await as(browser, "admin");
     await openCreative(page, TITLE);
+    const panel = page.getByRole("complementary", { name: "Details" }); // desktop side panel (phones get a separate action bar)
     for (const status of ["Approved", "Sent to ads"]) {
-      await page.getByLabel("Move to status").selectOption({ label: status });
-      await page.getByRole("button", { name: "Update" }).click();
+      await panel.getByLabel("Move to status").selectOption({ label: status });
+      await panel.getByRole("button", { name: "Update" }).click();
       await expect(page.getByText("Status updated")).toBeVisible();
     }
     await expect(page.getByText("Sent to ads").first()).toBeVisible();
@@ -47,11 +48,12 @@ test.describe.serial("request -> upload -> approve -> sent to ads -> live", () =
   test("ads cannot jump the queue, then takes it live with required details", async ({ browser }) => {
     const { page, context } = await as(browser, "ads");
     await openCreative(page, TITLE);
+    const panel = page.getByRole("complementary", { name: "Details" });
     // only live / paused / rejected / changes requested are offered
-    const options = await page.getByLabel("Move to status").locator("option").allTextContents();
+    const options = await panel.getByLabel("Move to status").locator("option").allTextContents();
     expect(options).not.toContain("Approved");
-    await page.getByLabel("Move to status").selectOption({ label: "Live" });
-    await page.getByRole("button", { name: "Update" }).click();
+    await panel.getByLabel("Move to status").selectOption({ label: "Live" });
+    await panel.getByRole("button", { name: "Update" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "Go live" }).click(); // link is required

@@ -89,7 +89,9 @@ describe.skipIf(!dbEnabled)("RLS: comments, notifications, channels, storage, an
       expect((await admin.client.from("messages").select("pinned").eq("id", m!.id).single()).data?.pinned).toBe(false);
       expect((await admin.client.from("messages").update({ pinned: true }).eq("id", m!.id)).error).toBeNull();
       expect((await admin.client.from("messages").select("pinned").eq("id", m!.id).single()).data?.pinned).toBe(true);
-      expect((await creative.client.from("messages").update({ body: "edited" }).eq("id", m!.id)).error).not.toBeNull();
+      // Not even the author can edit a message: no policy allows it, so zero rows change.
+      expect(denied(await creative.client.from("messages").update({ body: "edited" }).eq("id", m!.id).select())).toBe(true);
+      expect((await admin.client.from("messages").select("body").eq("id", m!.id).single()).data?.body).toBe("hi all");
 
       const { data: reply } = await ads.client.from("messages").insert({ channel_id, author_id: ads.id, body: "reply", parent_id: m!.id }).select("id").single();
       expect((await creative.client.from("notifications").select("type").eq("message_id", reply!.id)).data?.map((n) => n.type)).toEqual(["reply"]);

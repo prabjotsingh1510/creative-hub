@@ -47,3 +47,4 @@ next-env.d.ts
 /test-results
 /tests/e2e/.users.json
 /lighthouse-reports
+/.next-e2e

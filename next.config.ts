@@ -22,6 +22,8 @@ const csp = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Lets the end-to-end tests build into their own folder so they never clash with a running `next dev`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
   async headers() {
     return [

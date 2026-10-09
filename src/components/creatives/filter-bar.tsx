@@ -120,7 +120,7 @@ export function FilterBar({
             <Link
               key={qf.key}
               href={on ? href({ ...clearAll(filters), view: filters.view }) : `/creatives?${filtersToParams({ ...qf.filters, view: filters.view }).toString()}`}
-              aria-pressed={on}
+              aria-current={on ? "true" : undefined}
               className={cn("shrink-0 rounded-full border px-3 py-1 text-xs", on ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:bg-muted")}
             >
               {qf.label}
@@ -130,7 +130,7 @@ export function FilterBar({
         {role === "admin" && (
           <Link
             href={href({ deleted: !filters.deleted })}
-            aria-pressed={filters.deleted}
+            aria-current={filters.deleted ? "true" : undefined}
             className={cn("shrink-0 rounded-full border px-3 py-1 text-xs", filters.deleted ? "border-foreground bg-foreground text-background" : "text-muted-foreground hover:bg-muted")}
           >
             Deleted

@@ -68,7 +68,7 @@ export function ChannelChat({
   const target = highlightId ? initial.find((m) => m.id === highlightId) : undefined;
   const [open, setOpen] = useState<Set<string>>(new Set(target?.parent_id ? [target.parent_id] : []));
   const [flash, setFlash] = useState<string | null>(highlightId ?? null);
-  const endRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLLIElement>(null);
   const readTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => setMessages((prev) => [...prev.filter((p) => !initial.some((i) => i.id === p.id) && p.created_at < (initial[0]?.created_at ?? "~")), ...initial]), [initial]);
@@ -227,7 +227,7 @@ export function ChannelChat({
             )}
           </li>
         ))}
-        <div ref={endRef} />
+        <li ref={endRef} aria-hidden="true" />
       </ol>
       <div className="border-t p-3">
         <Composer channelId={channelId} parentId={null} me={me} people={people} />

@@ -23,11 +23,13 @@ export default defineConfig({
   ],
   webServer: enabled
     ? {
-        command: `npx next dev -p ${PORT}`,
+        // Production build: faster and what real users get (dev mode compiles each page on first visit).
+        command: `npx next build && npx next start -p ${PORT}`,
         url: `http://localhost:${PORT}/login`,
         reuseExistingServer: !process.env.CI,
-        timeout: 240_000,
+        timeout: 600_000,
         env: {
+          NEXT_DIST_DIR: ".next-e2e",
           NEXT_PUBLIC_SUPABASE_URL: process.env.TEST_SUPABASE_URL!,
           NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.TEST_SUPABASE_ANON_KEY!,
           SUPABASE_SERVICE_ROLE_KEY: process.env.TEST_SUPABASE_SERVICE_ROLE_KEY!,

@@ -58,7 +58,7 @@ export function CommentThread({
   const [query, setQuery] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLLIElement>(null);
   const byId = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const versionNo = useMemo(() => new Map(versions.map((v) => [v.id, v.version_no])), [versions]);
 
@@ -247,7 +247,7 @@ export function CommentThread({
             </li>
           );
         })}
-        <div ref={endRef} />
+        <li ref={endRef} aria-hidden="true" />
       </ol>
 
       <form
