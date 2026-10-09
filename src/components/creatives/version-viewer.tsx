@@ -6,13 +6,16 @@ import { toast } from "sonner";
 import { Expand, Film, Play, RotateCcw, Upload } from "lucide-react";
 import { registerVersion } from "@/actions/creatives";
 import { Button } from "@/components/ui/button";
-import { Lightbox } from "@/components/creatives/lightbox";
+import dynamic from "next/dynamic";
 import { canUpload } from "@/lib/permissions";
 import { forgetUpload, uploadWithThumb } from "@/lib/upload";
 import { validateCreativeFile } from "@/lib/validators";
 import { formatIST } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { CreativeVersion, Role } from "@/lib/types";
+
+// Zoom/pan code is only downloaded when someone opens an image full-screen.
+const Lightbox = dynamic(() => import("@/components/creatives/lightbox").then((m) => m.Lightbox), { ssr: false });
 
 type V = CreativeVersion & { fileUrl?: string; thumbUrl?: string };
 
@@ -189,7 +192,7 @@ export function VersionViewer({
         </ul>
       )}
 
-      <Lightbox items={images} index={lbIndex} open={lightbox} onOpenChange={setLightbox} onIndexChange={setLbIndex} />
+      {lightbox && <Lightbox items={images} index={lbIndex} open={lightbox} onOpenChange={setLightbox} onIndexChange={setLbIndex} />}
     </section>
   );
 }

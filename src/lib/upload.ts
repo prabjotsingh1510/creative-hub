@@ -1,5 +1,4 @@
 "use client";
-import * as tus from "tus-js-client";
 import { createClient } from "@/lib/supabase/client";
 import { checkContent } from "@/lib/sniff";
 
@@ -73,6 +72,8 @@ export async function uploadResumable(path: string, file: File, onProgress?: (pe
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new Error("Your session expired. Please sign in again.");
+  // Loaded on demand: the resumable-upload client is only needed once someone picks a file.
+  const tus = await import("tus-js-client");
   await new Promise<void>((resolve, reject) => {
     const upload = new tus.Upload(file, {
       endpoint: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/upload/resumable`,

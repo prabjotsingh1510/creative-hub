@@ -2,13 +2,13 @@
 
 One source of truth for Meta ad creatives: versions, discussion, dates and live status. See [CLAUDE.md](CLAUDE.md) for architecture and conventions.
 
-**Status: Phase 2** – on top of Phase 1 (auth/roles/RLS, creatives, versions, comments): dashboard, filters + search + sort (URL-based), in-app + email notifications with preferences, due-date reminders, full activity timeline + admin activity page, and a realtime General channel.
+**Status: Phase 3 (Kanban, mobile/PWA, performance, tests, hardening)** on top of Phase 2 – on top of Phase 1 (auth/roles/RLS, creatives, versions, comments): dashboard, filters + search + sort (URL-based), in-app + email notifications with preferences, due-date reminders, full activity timeline + admin activity page, and a realtime General channel.
 
 ## Setup
 
 1. **Create a Supabase project** (supabase.com). Free tier is fine (50 MB file cap).
 2. **Run the migrations** in order in the Supabase SQL editor (or `supabase db push` with the CLI):
-   `0001_schema.sql`, `0002_functions_triggers.sql`, `0003_rls_storage.sql` (Phase 1), then `0004_activity_and_policies.sql`, `0005_notifications.sql`, `0006_channels.sql`, `0007_search_filters.sql`, `0008_fix_creative_upload.sql` (Phase 2; 0008 fixes creative-role uploads). Run each file once, in order, in `supabase/migrations/`.
+   `0001_schema.sql`, `0002_functions_triggers.sql`, `0003_rls_storage.sql` (Phase 1), then `0004_activity_and_policies.sql`, `0005_notifications.sql`, `0006_channels.sql`, `0007_search_filters.sql`, `0008_fix_creative_upload.sql` (Phase 2; 0008 fixes creative-role uploads), then Phase 3: `0009_workflow_rules.sql`, `0010_perf_ratelimit.sql`, `0011_push.sql`, `0012_security_fixes.sql` (see below). Run each file once, in order, in `supabase/migrations/`.
 3. **Auth settings**: turn OFF "Allow new users to sign up" (Authentication → Sign In / Providers) – roles come from invite metadata, so open sign-up would let anyone pick a role. Then (Authentication → URL Configuration): set Site URL to your app URL and add `<app>/auth/confirm` to redirect URLs.
    The default invite email works as-is (links land on `/set-password`), so no template editing is needed. Also add `<app>/set-password` to the redirect URLs.
 4. **Env vars**: `cp .env.example .env.local` and fill in URL, anon key, service-role key (Project settings → API). The service-role key is server-only.
@@ -75,3 +75,78 @@ Reminder rules: "due today" fires from 00:00 IST on the due date, "overdue" afte
 
 ### Where things are
 Dashboard `/dashboard` · Creatives `/creatives` (filters in the URL) · Notifications `/notifications` · Settings `/settings/notifications` · General `/channels/general` · Admin activity `/admin/activity`.
+
+## Phase 3
+
+### New migrations (run in order, once each; test project first)
+| File | What it does |
+|---|---|
+| `0009_workflow_rules.sql` | **Behaviour change.** Ads can change status/live state only on creatives already sent to ads; "request changes" only from Sent to ads; nothing moves to Submitted without an uploaded file. |
+| `0010_perf_ratelimit.sql` | `comment_count` on `creatives_list`, keyset index, `dashboard_stats()`, rate-limit table + function. |
+| `0011_push.sql` | Optional Web Push tables/columns (does nothing until a device subscribes). |
+| `0012_security_fixes.sql` | Deactivated users can't read the directory; rate-limit key validation. |
+
+### Workflow rules (enforced in the database and the UI)
+| Role | Allowed status moves |
+|---|---|
+| creative | Requested / Changes requested -> Submitted (needs a file; uploading does this automatically) |
+| ads | only once Sent to ads: -> Live (asks for went-live time + Meta preview link), Paused, Rejected, or "Changes requested" from Sent to ads |
+| admin | anything (still not to Submitted without a file) |
+
+### Board (Kanban) view
+Creatives -> board icon. Desktop: drag by the grip handle. Phones and keyboards: the "Move to..." menu on each card (phones also get a column switcher). Disallowed moves are refused with a reason; moving to Live opens the go-live dialog. Filters and search apply to the board.
+
+### Install as an app (PWA)
+Chrome/Edge/Android: account menu -> **Install app**. iPhone/iPad: Safari -> Share -> **Add to Home Screen**. An offline page appears when there is no connection (no private data is cached).
+
+### Web push (optional)
+1. `npx web-push generate-vapid-keys`
+2. Set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:you@yourdomain.com` (Vercel + `.env.local`) and run migration 0011.
+3. Each person turns it on under **Settings -> Notification settings** on each device.
+Limits: iPhone/iPad only works after the app is added to the Home Screen (iOS 16.4+) and opened from there; some Android battery savers delay pushes; the daily cron or the 15-minute job retries failures.
+
+### Error reporting (optional)
+Set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` to turn on Sentry. Without them nothing is loaded or sent.
+
+### Testing
+| Command | What |
+|---|---|
+| `npm run check` | lint + typecheck + unit tests (offline) |
+| `npm run test:coverage` | unit tests with coverage (`src/lib`) |
+| `npm run test:rls` | **RLS integration suite** against a real test project (skipped without `.env.test`) |
+| `npm run test:e2e` | Playwright: admin -> creative -> approve -> ads live, mobile checks, axe accessibility |
+| `npm run lighthouse` | mobile Lighthouse on a production build |
+
+**Test project setup (one time):** create a second free Supabase project, run migrations `0001`-`0012` in it, add the three keys to `creative-hub/.env.test`:
+```
+TEST_SUPABASE_URL=https://xxxx.supabase.co
+TEST_SUPABASE_ANON_KEY=...
+TEST_SUPABASE_SERVICE_ROLE_KEY=...
+```
+Turn off "Confirm email" is not needed (users are created pre-confirmed). Never point these at your real project. `supabase/test-reset.sql` wipes a test project between runs. First e2e run: `npx playwright install chromium`.
+
+### CI
+`.github/workflows/ci.yml` runs lint, typecheck, unit tests + coverage and a build on every push. The RLS and e2e jobs run only when you add the three test secrets as repository secrets **and** a repository variable `RUN_DB_TESTS=true`. CI has not been executed yet (no GitHub remote); push the repo to GitHub to start it.
+
+### Backups and recovery
+- **Database:** Supabase Free has no downloadable daily backups or point-in-time recovery; Pro keeps daily backups (7 days) and offers PITR as an add-on. On Free, take your own: `npx supabase db dump --db-url "postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres" -f backup.sql` (and `--data-only` for data), weekly at least. Keep copies outside Supabase.
+- **Files:** the `creatives` bucket is not in database backups. Copy it periodically (Storage -> download, or `rclone`/S3-compatible access from Project Settings -> Storage). Originals should also live in the Drive links.
+- **Restore:** create a new Supabase project, run the migrations `0001`-`0012`, then load the data dump, re-upload files, update the three env vars, and re-add the auth users (the dump of `auth.users` is included in a full `db dump`).
+- **Accidental deletes:** creatives are soft-deleted; admin -> Creatives -> Deleted -> Restore. The activity log can never be edited.
+
+### Production deployment checklist
+1. Supabase: run migrations `0001`-`0012`; Authentication: **sign-ups off**, Site URL + `/set-password` redirect set to the production URL; consider enabling CAPTCHA / Attack Protection.
+2. Create the first admin (SQL in Setup step 5) and invite the team from **Users**.
+3. Vercel: import the repo; env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SITE_URL` (production URL), `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`; optional `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`.
+4. Resend: verify your domain; send a test mention.
+5. Scheduler: paste `supabase/optional/pg_cron.sql` (15-minute job); Vercel's daily cron in `vercel.json` is the backup.
+6. Smoke test as each role (request -> upload -> approve -> sent to ads -> live), install the PWA on a phone, check the offline page.
+7. Run `npm run test:rls` / `test:e2e` against the test project before each release; keep weekly backups.
+
+### Known limitations
+- Push on iOS needs the Home Screen app; Web push and email are best-effort.
+- Lighthouse numbers are lab data (simulated slow 4G/4x CPU) from a dev machine; real phones vary.
+- Signed image URLs mean thumbnails aren't served through an image CDN on the free Supabase tier.
+- The board shows up to 300 matches; the list loads 24 at a time.
+- Messages deep-linked from a notification only scroll into view if they are within the loaded page (use "Load earlier").
+- CSP is report-only; 9 `npm audit` advisories need a Next 16 upgrade (see `docs/SECURITY.md`).

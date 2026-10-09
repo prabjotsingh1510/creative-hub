@@ -10,6 +10,9 @@ const subscription = z.object({
   keys: z.object({ p256dh: z.string().min(10).max(200), auth: z.string().min(5).max(100) }),
 });
 
+/** JSON-only: a cross-site form post cannot send this content type, which blocks CSRF on cookie auth. */
+const isJson = (r: NextRequest) => (r.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json");
+
 async function currentUser() {
   const supabase = await createClient();
   const {
@@ -22,6 +25,7 @@ async function currentUser() {
 export async function POST(request: NextRequest) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isJson(request)) return NextResponse.json({ error: "Unsupported content type" }, { status: 415 });
   const parsed = subscription.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
   const admin = createAdminClient();
@@ -42,6 +46,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isJson(request)) return NextResponse.json({ error: "Unsupported content type" }, { status: 415 });
   const body = (await request.json().catch(() => null)) as { endpoint?: string } | null;
   if (!body?.endpoint) return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });
   const admin = createAdminClient();

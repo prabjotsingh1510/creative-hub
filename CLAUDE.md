@@ -43,3 +43,20 @@ Key DB functions/triggers: `guard_creative_update` (column-level role rules, sta
 
 ## Future (don't build yet, keep easy to add)
 WhatsApp/Slack alerts (route all notifications through one `notify()` in Phase 2), social posting calendar for OutOfCtrl, Meta Ads API metrics per creative (`creative_metrics` table keyed by creative_id).
+
+## Phase 3 conventions
+- **Workflow rules live in `src/lib/workflow.ts`** (`canTransition`, `canEditLiveState`, board columns). The UI, server actions (`setStatus`, `goLive`) and tests share it; the database trigger `guard_creative_update` (0009) enforces the same rules. Change both together and update `tests/workflow.test.ts` + `tests/rls`.
+- Going Live always goes through `goLive()` (went-live time + Meta link required); `setStatus('live')` is rejected.
+- One query path for grid/table/board: `lib/creatives-data.ts#loadCreativeCards` (filters from `lib/filters.ts`). Lists paginate by offset with a stable `id` tie-break; comments, activity, notifications and channel messages use **keyset cursors** (`lib/cursor.ts`, `actions/pagination.ts`).
+- Uploads: browser -> Storage via TUS (`lib/upload.ts`), then `registerVersion` verifies magic bytes (`lib/sniff.ts`, `lib/upload-verify.ts`) and rate-limits (`lib/rate-limit.ts`). Never trust the client MIME type.
+- `signPaths` caches signed URLs per server instance (~1 h reuse) so browsers can cache thumbnails.
+- Heavy client libraries (tus, zoom/pan, Supabase browser client on /login) are imported on demand; keep first-load JS small. Never run `next build` while `next dev` is running (they share `.next`).
+- PWA: `app/manifest.ts`, generated icons (`lib/icon.tsx`), `public/sw.js` (offline fallback + push only, caches no private data). Push is off unless VAPID keys are set (`lib/push/dispatch.ts`).
+- Tests: unit (`tests/*.test.ts`), RLS integration (`tests/rls`, needs `.env.test`), Playwright (`tests/e2e`). A role-permission change without an RLS test is incomplete.
+- Security notes and open findings: `docs/SECURITY.md`.
+
+## Roadmap (design only, not built)
+Extension points already in place so these are additive:
+1. **WhatsApp / Slack alerts.** All events flow through `notify()` (DB) into `notifications`. Add a channel the same way email/push work: new `<channel>_status/_attempts/_claimed_at` columns, a `claim_pending_<channel>()` function, a `lib/<channel>/dispatch.ts` called from `emailSoon()` and `/api/cron/reminders`, and a per-user opt-in table (`notification_preferences` already supports per-event toggles). Slack: incoming webhook or bot; WhatsApp: Business Cloud API with approved templates (24-hour session rules apply). Keep tokens server-only.
+2. **OutOfCtrl social posting calendar.** New tables `social_posts(id, title, caption, platform, scheduled_for timestamptz, status, created_by, creative_id null)` and `social_post_assets`; RLS: creative + admin write, ads read. Reuse `activity_log` (add a nullable `social_post_id` or a generic `entity`), `notifications` types, the date helpers in `lib/time.ts` (IST) and the card/board components; a calendar view is a new page under `(app)/social`. Auto-publishing to Meta/Instagram would be a later cron.
+3. **Meta Ads performance metrics.** Add `meta_ad_id text` to `creatives` (admin/ads editable, validated) and `creative_metrics(creative_id, day date, spend, impressions, clicks, ctr, roas, fetched_at, primary key(creative_id, day))` with read access for all roles and writes only by the service role. A cron route (like `/api/cron/reminders`) pulls Insights from the Marketing API using a system-user token stored as a server env var, and the detail page gets a metrics panel. The existing Meta preview link can be parsed for the ad ID as a fallback.

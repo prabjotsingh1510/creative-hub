@@ -1,64 +1,18 @@
-"use client";
+import { LoginForm } from "./login-form";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+export const metadata = { title: "Sign in" };
 
-function LoginForm() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(
-    params.get("error") === "inactive" ? "This account is deactivated." : null,
-  );
-  const [busy, setBusy] = useState(false);
+const MESSAGES: Record<string, string> = {
+  inactive: "This account is deactivated.",
+  invalid_link: "That link is invalid or has expired. Ask the admin to send a new invite.",
+};
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    const { error } = await createClient().auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(error.message);
-      setBusy(false);
-      return;
-    }
-    router.replace("/dashboard");
-    router.refresh();
-  }
-
+// Server-rendered shell: the form is in the first HTML response (fast first paint), hydrated afterwards.
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   return (
-    <main className="flex min-h-dvh items-center justify-center p-4">
-      <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 rounded-xl border bg-card p-6 shadow-sm">
-        <div>
-          <h1 className="text-xl font-semibold">Creative Hub</h1>
-          <p className="text-sm text-muted-foreground">Sign in with the email you were invited with.</p>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
-          <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-        </div>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="w-full" size="lg" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
+    <main id="main" className="flex min-h-dvh items-center justify-center p-4">
+      <LoginForm initialError={(error && MESSAGES[error]) || null} />
     </main>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense>
-      <LoginForm />
-    </Suspense>
   );
 }

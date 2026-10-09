@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,8 +16,9 @@ export default function SetPasswordPage() {
   // Default Supabase invite emails land here with tokens in the URL hash
   // (#access_token=...&refresh_token=...). Hashes never reach the server, so exchange them here.
   useEffect(() => {
-    const supabase = createClient();
     (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
       const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
       const access_token = hash.get("access_token");
       const refresh_token = hash.get("refresh_token");
@@ -39,6 +39,7 @@ export default function SetPasswordPage() {
     e.preventDefault();
     if (password.length < 8) return setError("Use at least 8 characters.");
     setBusy(true);
+    const { createClient } = await import("@/lib/supabase/client");
     const { error } = await createClient().auth.updateUser({ password });
     if (error) {
       setError(error.message);
