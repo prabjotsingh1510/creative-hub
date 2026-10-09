@@ -26,7 +26,15 @@ Next.js 15 (App Router, TS) · Tailwind v4 · shadcn/ui (base-ui flavour, `rende
 `creative_versions(creative_id, version_no, file_path, thumb_path, mime, size_bytes, uploaded_by)` ·
 `comments(creative_id, version_id?, author_id, body, pinned)` · `comment_attachments` · `mentions` ·
 `activity_log(creative_id, actor_id, action, from_value, to_value, meta)` ·
-Phase 2 tables already exist: `notifications`, `channels`, `messages`.
+
+### Phase 2 additions (migrations 0004-0007)
+- `notifications(user_id, type, creative_id, actor_id, comment_id, message_id, payload, read_at, dedupe_key, email_status, email_attempts)` — **created only by DB triggers via `notify()`** (security definer; never notifies the actor; sets email_status from `notification_preferences` or `default_email_pref()`). Clients can only set `read_at`. Event types live in `lib/notifications.ts` (keep in sync with the `notifications_type_check` constraint and `default_email_pref`).
+- `notification_preferences(user_id, event_type, email)`, `profiles.daily_digest`, `due_reminders` (unique creative+kind+due_date), `digest_log`.
+- `activity_log` now also records `field_changed` (meta.field, old→new), `pinned`/`unpinned`. Insert only via security-definer functions; immutable for everyone; readable per creatives RLS.
+- `channels(slug, allowed_roles, archived_at)`, `messages(parent_id)` one-level threads, `message_attachments`, `message_mentions`, `channel_reads` (unread via `channel_unread_counts()`); pin = admin only. Add channels by inserting a row — no migration needed.
+- `creatives_list` view (security_invoker) adds `timing` (on_time/late/overdue/pending/none), `deadline_at`, current file + `uploader_ids`; `search_creative_ids(q)` does ILIKE (pg_trgm indexed) over creative fields + comment text.
+- Emails: `lib/email/dispatch.ts` (`claim_pending_emails` RPC → Resend), `emailSoon()` after actions, `/api/cron/reminders` (Bearer `CRON_SECRET`) = reminders + email retry + digests. Scheduler options in README.
+- List filters are URL params parsed by `lib/filters.ts` (single source for parse/serialise/quick filters/waiting-on-me).
 
 Enums: `user_role(admin|creative|ads)`, `creative_status(requested|submitted|changes_requested|approved|sent_to_ads|live|paused|rejected)`, `live_state(not_live|live|paused|rejected)`.
 `live_state` drives `status` for live/paused/rejected; `is_live` is generated.
