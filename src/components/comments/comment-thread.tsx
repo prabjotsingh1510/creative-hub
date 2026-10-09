@@ -22,12 +22,14 @@ export function CommentThread({
   people,
   versions,
   initial,
+  highlightId,
 }: {
   creativeId: string;
   me: Profile;
   people: Profile[];
   versions: { id: string; version_no: number }[];
   initial: ThreadComment[];
+  highlightId?: string;
 }) {
   const [comments, setComments] = useState<ThreadComment[]>(initial);
   const [body, setBody] = useState("");
@@ -80,9 +82,19 @@ export function CommentThread({
     };
   }, [creativeId]);
 
+  // Deep link (?comment=<id>): scroll to and briefly highlight that comment; otherwise follow the newest.
+  const [flash, setFlash] = useState<string | null>(highlightId ?? null);
   useEffect(() => {
+    if (flash) {
+      const el = document.getElementById(`comment-${flash}`);
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        const t = setTimeout(() => setFlash(null), 3000);
+        return () => clearTimeout(t);
+      }
+    }
     endRef.current?.scrollIntoView({ block: "nearest" });
-  }, [comments.length]);
+  }, [comments.length, flash]);
 
   const pinned = comments.filter((c) => c.pinned);
   const suggestions =
@@ -172,7 +184,7 @@ export function CommentThread({
           const author = byId.get(c.author_id);
           const mine = c.author_id === me.id;
           return (
-            <li key={c.id} className={cn("flex flex-col", mine && "items-end")}>
+            <li id={`comment-${c.id}`} key={c.id} className={cn("flex scroll-mt-24 flex-col rounded-lg transition-colors", mine && "items-end", flash === c.id && "bg-amber-500/20")}>
               <div className={cn("max-w-[90%] rounded-2xl px-3 py-2 text-sm", mine ? "bg-primary text-primary-foreground" : "bg-muted")}>
                 <div className="mb-0.5 flex flex-wrap items-center gap-x-2 text-xs opacity-80">
                   <b>{author?.name ?? "Unknown"}</b>

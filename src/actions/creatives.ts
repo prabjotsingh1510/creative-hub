@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { emailSoon } from "@/lib/email/soon";
 import {
   adsFieldsSchema,
   creativeFieldsSchema,
@@ -31,6 +32,7 @@ export async function createRequest(input: z.input<typeof requestSchema>): Promi
     .single();
   if (error) return fail(msg(error));
   revalidatePath("/creatives");
+  emailSoon();
   return { ok: true, data: { id: data.id } };
 }
 
@@ -82,6 +84,7 @@ export async function updateAdsFields(
   if (error) return fail(msg(error));
   revalidatePath(`/creatives/${id}`);
   revalidatePath("/creatives");
+  emailSoon();
   return { ok: true };
 }
 
@@ -98,6 +101,7 @@ export async function setStatus(id: string, status: string): Promise<Result> {
   if (error) return fail(msg(error));
   revalidatePath(`/creatives/${id}`);
   revalidatePath("/creatives");
+  emailSoon();
   return { ok: true };
 }
 
@@ -136,5 +140,6 @@ export async function registerVersion(input: {
   if (error) return fail(msg(error));
   revalidatePath(`/creatives/${input.creativeId}`);
   revalidatePath("/creatives");
+  emailSoon();
   return { ok: true };
 }

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // /set-password is public so the invite hash tokens can be exchanged client-side before a session exists.
-const PUBLIC = ["/login", "/auth", "/set-password"];
+const PUBLIC = ["/login", "/auth", "/set-password", "/api/cron"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -33,7 +33,7 @@ export async function middleware(request: NextRequest) {
   }
   if (user && path === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/creatives";
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
   return response;

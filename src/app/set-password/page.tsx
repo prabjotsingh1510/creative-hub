@@ -45,7 +45,7 @@ export default function SetPasswordPage() {
       setBusy(false);
       return;
     }
-    router.replace("/creatives");
+    router.replace("/dashboard");
     router.refresh();
   }
 

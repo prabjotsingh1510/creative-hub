@@ -8,6 +8,7 @@ import { VersionViewer } from "@/components/creatives/version-viewer";
 import { DetailsPanel } from "@/components/creatives/details-panel";
 import { CommentThread } from "@/components/comments/comment-thread";
 import { ActivityLog } from "@/components/creatives/activity-log";
+import { DetailTabs } from "@/components/creatives/detail-tabs";
 import type {
   ActivityRow,
   CommentAttachment,
@@ -17,8 +18,15 @@ import type {
   Profile,
 } from "@/lib/types";
 
-export default async function CreativePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CreativePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ comment?: string }>;
+}) {
   const { id } = await params;
+  const { comment: highlightComment } = await searchParams;
   const profile = await requireProfile();
   const supabase = await createClient();
 
@@ -29,7 +37,7 @@ export default async function CreativePage({ params }: { params: Promise<{ id: s
   const [versionsRes, commentsRes, activityRes, profilesRes] = await Promise.all([
     supabase.from("creative_versions").select("*").eq("creative_id", id).order("version_no", { ascending: false }),
     supabase.from("comments").select("*, comment_attachments(*)").eq("creative_id", id).order("created_at"),
-    supabase.from("activity_log").select("*").eq("creative_id", id).order("created_at", { ascending: false }).limit(100),
+    supabase.from("activity_log").select("*").eq("creative_id", id).order("created_at", { ascending: false }).limit(300),
     supabase.from("profiles").select("id,name,role,team,avatar_url,email,active").eq("active", true),
   ]);
 
@@ -70,19 +78,23 @@ export default async function CreativePage({ params }: { params: Promise<{ id: s
         <DetailsPanel creative={c} role={profile.role} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <CommentThread
-          creativeId={c.id}
-          me={profile}
-          people={people}
-          versions={versions.map((v) => ({ id: v.id, version_no: v.version_no }))}
-          initial={comments.map((cm) => ({
-            ...cm,
-            attachments: cm.comment_attachments.map((a) => ({ ...a, url: urls[a.path] })),
-          }))}
-        />
-        <ActivityLog rows={activity} people={people} />
-      </div>
+      <DetailTabs
+        timelineCount={activity.length}
+        discussion={
+          <CommentThread
+            creativeId={c.id}
+            me={profile}
+            people={people}
+            highlightId={highlightComment}
+            versions={versions.map((v) => ({ id: v.id, version_no: v.version_no }))}
+            initial={comments.map((cm) => ({
+              ...cm,
+              attachments: cm.comment_attachments.map((a) => ({ ...a, url: urls[a.path] })),
+            }))}
+          />
+        }
+        timeline={<ActivityLog rows={activity} people={people} />}
+      />
     </div>
   );
 }

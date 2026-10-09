@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { validateAttachment } from "@/lib/validators";
+import { emailSoon } from "@/lib/email/soon";
 import type { Result } from "./creatives";
 
 const schema = z.object({
@@ -55,6 +56,7 @@ export async function addComment(input: z.input<typeof schema>): Promise<Result<
       })),
     );
   }
+  emailSoon();
   return { ok: true, data: { id: c.id } };
 }
 
