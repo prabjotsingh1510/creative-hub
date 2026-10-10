@@ -8,7 +8,7 @@ One source of truth for Meta ad creatives: versions, discussion, dates and live 
 
 1. **Create a Supabase project** (supabase.com). Free tier is fine (50 MB file cap).
 2. **Run the migrations** in order in the Supabase SQL editor (or `supabase db push` with the CLI):
-   `0001_schema.sql`, `0002_functions_triggers.sql`, `0003_rls_storage.sql` (Phase 1), then `0004_activity_and_policies.sql`, `0005_notifications.sql`, `0006_channels.sql`, `0007_search_filters.sql`, `0008_fix_creative_upload.sql` (Phase 2; 0008 fixes creative-role uploads), then Phase 3: `0009_workflow_rules.sql`, `0010_perf_ratelimit.sql`, `0011_push.sql`, `0012_security_fixes.sql` (see below). Run each file once, in order, in `supabase/migrations/`.
+   `0001_schema.sql`, `0002_functions_triggers.sql`, `0003_rls_storage.sql` (Phase 1), then `0004_activity_and_policies.sql`, `0005_notifications.sql`, `0006_channels.sql`, `0007_search_filters.sql`, `0008_fix_creative_upload.sql` (Phase 2; 0008 fixes creative-role uploads), then Phase 3: `0009_workflow_rules.sql`, `0010_perf_ratelimit.sql`, `0011_push.sql`, `0012_security_fixes.sql`, `0013_ads_from_approved.sql` (see below). Run each file once, in order, in `supabase/migrations/`.
 3. **Auth settings**: turn OFF "Allow new users to sign up" (Authentication → Sign In / Providers) – roles come from invite metadata, so open sign-up would let anyone pick a role. Then (Authentication → URL Configuration): set Site URL to your app URL and add `<app>/auth/confirm` to redirect URLs.
    The default invite email works as-is (links land on `/set-password`), so no template editing is needed. Also add `<app>/set-password` to the redirect URLs.
 4. **Env vars**: `cp .env.example .env.local` and fill in URL, anon key, service-role key (Project settings → API). The service-role key is server-only.
@@ -85,12 +85,13 @@ Dashboard `/dashboard` · Creatives `/creatives` (filters in the URL) · Notific
 | `0010_perf_ratelimit.sql` | `comment_count` on `creatives_list`, keyset index, `dashboard_stats()`, rate-limit table + function. |
 | `0011_push.sql` | Optional Web Push tables/columns (does nothing until a device subscribes). |
 | `0012_security_fixes.sql` | Deactivated users can't read the directory; rate-limit key validation. |
+| `0013_ads_from_approved.sql` | **Behaviour change.** Ads can also act on **Approved** creatives (take them live directly, or request changes); everything earlier is still off limits. |
 
 ### Workflow rules (enforced in the database and the UI)
 | Role | Allowed status moves |
 |---|---|
 | creative | Requested / Changes requested -> Submitted (needs a file; uploading does this automatically) |
-| ads | only once Sent to ads: -> Live (asks for went-live time + Meta preview link), Paused, Rejected, or "Changes requested" from Sent to ads |
+| ads | once Approved or Sent to ads: -> Live (asks for went-live time + Meta preview link), Paused, Rejected, or "Changes requested" (migration 0013 lets ads take Approved straight to Live) |
 | admin | anything (still not to Submitted without a file) |
 
 ### Board (Kanban) view
@@ -117,7 +118,7 @@ Set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` to turn on Sentry. Without them no
 | `npm run test:e2e` | Playwright: admin -> creative -> approve -> ads live, mobile checks, axe accessibility |
 | `npm run lighthouse` | mobile Lighthouse on a production build |
 
-**Test project setup (one time):** create a second free Supabase project, run migrations `0001`-`0012` in it, add the three keys to `creative-hub/.env.test`:
+**Test project setup (one time):** create a second free Supabase project, run migrations `0001`-`0013` in it, add the three keys to `creative-hub/.env.test`:
 ```
 TEST_SUPABASE_URL=https://xxxx.supabase.co
 TEST_SUPABASE_ANON_KEY=...
@@ -131,11 +132,11 @@ Turn off "Confirm email" is not needed (users are created pre-confirmed). Never 
 ### Backups and recovery
 - **Database:** Supabase Free has no downloadable daily backups or point-in-time recovery; Pro keeps daily backups (7 days) and offers PITR as an add-on. On Free, take your own: `npx supabase db dump --db-url "postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres" -f backup.sql` (and `--data-only` for data), weekly at least. Keep copies outside Supabase.
 - **Files:** the `creatives` bucket is not in database backups. Copy it periodically (Storage -> download, or `rclone`/S3-compatible access from Project Settings -> Storage). Originals should also live in the Drive links.
-- **Restore:** create a new Supabase project, run the migrations `0001`-`0012`, then load the data dump, re-upload files, update the three env vars, and re-add the auth users (the dump of `auth.users` is included in a full `db dump`).
+- **Restore:** create a new Supabase project, run the migrations `0001`-`0013`, then load the data dump, re-upload files, update the three env vars, and re-add the auth users (the dump of `auth.users` is included in a full `db dump`).
 - **Accidental deletes:** creatives are soft-deleted; admin -> Creatives -> Deleted -> Restore. The activity log can never be edited.
 
 ### Production deployment checklist
-1. Supabase: run migrations `0001`-`0012`; Authentication: **sign-ups off**, Site URL + `/set-password` redirect set to the production URL; consider enabling CAPTCHA / Attack Protection.
+1. Supabase: run migrations `0001`-`0013`; Authentication: **sign-ups off**, Site URL + `/set-password` redirect set to the production URL; consider enabling CAPTCHA / Attack Protection.
 2. Create the first admin (SQL in Setup step 5) and invite the team from **Users**.
 3. Vercel: import the repo; env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SITE_URL` (production URL), `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`; optional `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`.
 4. Resend: verify your domain; send a test mention.

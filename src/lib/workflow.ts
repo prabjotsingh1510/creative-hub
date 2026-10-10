@@ -8,7 +8,8 @@ import { STATUSES, type Role, type Status } from "./types";
  */
 export type TransitionResult = { ok: true } | { ok: false; reason: string };
 
-export const ADS_ACTIVE_STATUSES: Status[] = ["sent_to_ads", "live", "paused", "rejected"];
+/** Ads may act from Approved (taking it live directly) or Sent to ads, and from the live states. */
+export const ADS_ACTIVE_STATUSES: Status[] = ["approved", "sent_to_ads", "live", "paused", "rejected"];
 const LIVE_STATES: Status[] = ["live", "paused", "rejected"];
 
 export interface TransitionContext {
@@ -29,14 +30,14 @@ export function canTransition(role: Role, from: Status, to: Status, ctx: Transit
 
   // ads
   if (!ADS_ACTIVE_STATUSES.includes(from)) {
-    return { ok: false, reason: "The ads team can only act on creatives that were sent to ads." };
+    return { ok: false, reason: "The ads team can only act on creatives that are approved or sent to ads." };
   }
   if (LIVE_STATES.includes(to)) return { ok: true };
-  if (from === "sent_to_ads" && to === "changes_requested") return { ok: true };
+  if ((from === "sent_to_ads" || from === "approved") && to === "changes_requested") return { ok: true };
   return { ok: false, reason: "The ads team can move creatives to Live, Paused or Rejected, or request changes before going live." };
 }
 
-/** Ads may toggle live state only on creatives that were sent to ads. Admin always may. */
+/** Ads may toggle live state only on creatives that are approved or sent to ads (or already live). Admin always may. */
 export function canEditLiveState(role: Role, status: Status): boolean {
   if (role === "admin") return true;
   if (role === "ads") return ADS_ACTIVE_STATUSES.includes(status);

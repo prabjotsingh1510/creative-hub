@@ -23,14 +23,17 @@ describe("workflow transitions", () => {
     }
   });
 
-  it("ads: Sent to ads -> Live/Paused/Rejected or request changes; nothing before sent to ads", () => {
-    for (const to of ["live", "paused", "rejected"] as Status[]) expect(ok("ads", "sent_to_ads", to)).toBe(true);
-    expect(ok("ads", "sent_to_ads", "changes_requested")).toBe(true);
+  it("ads: Approved or Sent to ads -> Live/Paused/Rejected or request changes; nothing earlier", () => {
+    for (const from of ["approved", "sent_to_ads"] as Status[]) {
+      for (const to of ["live", "paused", "rejected", "changes_requested"] as Status[]) expect(ok("ads", from, to)).toBe(true);
+    }
     expect(ok("ads", "live", "paused")).toBe(true);
     expect(ok("ads", "paused", "live")).toBe(true);
     expect(ok("ads", "live", "changes_requested")).toBe(false);
     expect(ok("ads", "sent_to_ads", "approved")).toBe(false);
-    for (const from of ["requested", "submitted", "changes_requested", "approved"] as Status[]) {
+    expect(ok("ads", "approved", "sent_to_ads")).toBe(false);
+    expect(ok("ads", "approved", "requested")).toBe(false);
+    for (const from of ["requested", "submitted", "changes_requested"] as Status[]) {
       for (const to of STATUSES) expect(ok("ads", from, to)).toBe(false);
     }
   });
@@ -57,7 +60,8 @@ describe("workflow transitions", () => {
   it("lists targets per role", () => {
     expect(allowedTargets("creative", "requested")).toEqual(["submitted"]);
     expect(allowedTargets("ads", "sent_to_ads")).toEqual(["changes_requested", "live", "paused", "rejected"]);
-    expect(allowedTargets("ads", "approved")).toEqual([]);
+    expect(allowedTargets("ads", "approved")).toEqual(["changes_requested", "live", "paused", "rejected"]);
+    expect(allowedTargets("ads", "submitted")).toEqual([]);
     expect(allowedTargets("admin", "approved")).toHaveLength(STATUSES.length - 1);
   });
 

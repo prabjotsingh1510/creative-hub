@@ -99,7 +99,7 @@ export function hasActiveFilters(f: ListFilters): boolean {
 export function waitingStatuses(role: Role): Status[] {
   if (role === "admin") return ["submitted"];
   if (role === "creative") return ["requested", "changes_requested"];
-  return ["sent_to_ads"];
+  return ["approved", "sent_to_ads"];
 }
 
 export interface QuickFilter {

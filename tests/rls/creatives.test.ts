@@ -110,12 +110,30 @@ describe.skipIf(!dbEnabled)("RLS: creatives, versions, DP fields, workflow", () 
       expect(data?.status).toBe("submitted");
     });
 
-    it("ads cannot act before a creative is sent to ads", async () => {
+    it("ads cannot act on creatives that are not yet approved", async () => {
       const id = await makeCreative(admin);
       await uploadVersion(creative, id);
       for (const patch of [{ status: "live" }, { status: "approved" }, { status: "changes_requested" }, { live_state: "live" }]) {
         expect((await ads.client.from("creatives").update(patch).eq("id", id)).error, JSON.stringify(patch)).not.toBeNull();
       }
+    });
+
+    it("ads can take an Approved creative live directly, or request changes, but not move it elsewhere", async () => {
+      const id = await makeCreative(admin);
+      await uploadVersion(creative, id);
+      await forceStatus(id, { status: "approved" });
+      for (const patch of [{ status: "requested" }, { status: "sent_to_ads" }, { status: "submitted" }]) {
+        expect((await ads.client.from("creatives").update(patch).eq("id", id)).error, JSON.stringify(patch)).not.toBeNull();
+      }
+      expect((await ads.client.from("creatives").update({ live_state: "live", meta_preview_link: "https://fb.me/2" }).eq("id", id)).error).toBeNull();
+      const { data } = await admin.client.from("creatives").select("status, went_live_at").eq("id", id).single();
+      expect(data?.status).toBe("live");
+      expect(data?.went_live_at).not.toBeNull();
+
+      const id2 = await makeCreative(admin);
+      await uploadVersion(creative, id2);
+      await forceStatus(id2, { status: "approved" });
+      expect((await ads.client.from("creatives").update({ status: "changes_requested" }).eq("id", id2)).error).toBeNull();
     });
 
     it("ads can go live / pause / reject / request changes once sent to ads; went_live_at is auto-set", async () => {

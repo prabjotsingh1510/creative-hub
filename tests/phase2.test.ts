@@ -47,7 +47,7 @@ describe("filters", () => {
   it("maps 'waiting on me' per role", () => {
     expect(waitingStatuses("admin")).toEqual(["submitted"]);
     expect(waitingStatuses("creative")).toEqual(["requested", "changes_requested"]);
-    expect(waitingStatuses("ads")).toEqual(["sent_to_ads"]);
+    expect(waitingStatuses("ads")).toEqual(["approved", "sent_to_ads"]);
   });
 
   it("detects the active quick filter", () => {
