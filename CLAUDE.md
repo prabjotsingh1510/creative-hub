@@ -55,6 +55,11 @@ WhatsApp/Slack alerts (route all notifications through one `notify()` in Phase 2
 - Tests: unit (`tests/*.test.ts`), RLS integration (`tests/rls`, needs `.env.test`), Playwright (`tests/e2e`). A role-permission change without an RLS test is incomplete.
 - Security notes and open findings: `docs/SECURITY.md`.
 
+## Ads Tracker tab (migration 0014)
+- `/tracker` mirrors the "CreativeTracker_Dabble - Ads Tracker" sheet: one row per creative, creative preview pinned left, **most recently updated first** (`creatives.updated_at`, stamped by `guard_creative_update`). Sheet columns map to existing fields (Asset Name=`title`, Shared Date=`submitted_at`, Go-live=`went_live_at`, Meta status=`live_state`, Last Edited=`updated_at`, Media Type=`format`) plus the new tracker columns on `creatives`.
+- Tracker columns are editable by admin + ads only (creative role is blocked in the guard trigger); edit form = `TrackerSection` on the creative detail page → `updateTrackerFields`.
+- Read path: `tracker_list` view (adds stable `sno`, current-file thumbnail) via `lib/tracker-data.ts`; sheet mapping/CSV header in `lib/tracker.ts`. `/api/tracker/export` emits the sheet's column order.
+
 ## Roadmap (design only, not built)
 Extension points already in place so these are additive:
 1. **WhatsApp / Slack alerts.** All events flow through `notify()` (DB) into `notifications`. Add a channel the same way email/push work: new `<channel>_status/_attempts/_claimed_at` columns, a `claim_pending_<channel>()` function, a `lib/<channel>/dispatch.ts` called from `emailSoon()` and `/api/cron/reminders`, and a per-user opt-in table (`notification_preferences` already supports per-event toggles). Slack: incoming webhook or bot; WhatsApp: Business Cloud API with approved templates (24-hour session rules apply). Keep tokens server-only.

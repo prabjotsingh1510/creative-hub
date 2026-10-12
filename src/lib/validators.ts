@@ -70,6 +70,32 @@ export const adsFieldsSchema = z.object({
   ads_notes: optionalText(5000),
 });
 
+const triState = z
+  .enum(["", "yes", "no"])
+  .transform((v) => (v === "" ? null : v === "yes"));
+
+/** Ads Tracker fields (admin + ads; enforced by the guard trigger, migration 0014). */
+export const trackerFieldsSchema = z.object({
+  product_advertised: optionalText(120),
+  asset_type: z.enum(["", "inhouse", "parent"]).transform((v) => (v === "" ? null : v)),
+  creator_name: optionalText(120),
+  instagram_handle: optionalText(120),
+  ad_name: optionalText(300),
+  meta_campaign_name: optionalText(300),
+  ad_set_name: optionalText(300),
+  partnership_ad: triState,
+  language: optionalText(60),
+  face_in_first_3s: triState,
+  audio_hook_first_3s: triState,
+  text_in_first_3s: triState,
+  caption: optionalText(5000),
+  landing_page_url: optionalUrl,
+  landing_page_type: z.enum(["", "Product Page", "Collection Page", "Home Page", "Other"]).transform((v) => (v === "" ? null : v)),
+  cta_used: optionalText(120),
+  pause_reason: optionalText(1000),
+  tracker_comments: optionalText(5000),
+});
+
 export const inviteSchema = z.object({
   email: z.string().trim().email(),
   name: z.string().trim().min(1).max(120),

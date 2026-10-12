@@ -13,6 +13,7 @@ import {
   creativeFieldsSchema,
   requestSchema,
   statusSchema,
+  trackerFieldsSchema,
   validateCreativeFile,
 } from "@/lib/validators";
 
@@ -92,6 +93,21 @@ export async function updateAdsFields(
   revalidatePath(`/creatives/${id}`);
   revalidatePath("/creatives");
   emailSoon();
+  return { ok: true };
+}
+
+/** Ads Tracker details (product, ad/campaign/ad-set names, hooks, landing page…). Admin + ads only (guard trigger). */
+export async function updateTrackerFields(
+  id: string,
+  input: z.input<typeof trackerFieldsSchema>,
+): Promise<Result> {
+  const parsed = trackerFieldsSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0].message);
+  const supabase = await createClient();
+  const { error } = await supabase.from("creatives").update(parsed.data).eq("id", id);
+  if (error) return fail(msg(error));
+  revalidatePath(`/creatives/${id}`);
+  revalidatePath("/tracker");
   return { ok: true };
 }
 

@@ -28,6 +28,12 @@ const FIELD_LABEL: Record<string, string> = {
   ads_notes: "DP notes",
   went_live_at: "went-live time",
   submitted_at: "submission time",
+  ad_name: "ad name",
+  meta_campaign_name: "Meta campaign name",
+  ad_set_name: "ad set name",
+  product_advertised: "product advertised",
+  landing_page_url: "landing page URL",
+  pause_reason: "pause reason",
 };
 
 const clip = (s: string | null, n = 60) => (s == null || s === "" ? "empty" : s.length > n ? s.slice(0, n) + "…" : s);

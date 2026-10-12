@@ -86,6 +86,27 @@ export interface Creative {
   meta_preview_link: string | null;
   ads_notes: string | null;
   current_version_id: string | null;
+  // Ads Tracker fields (migration 0014)
+  product_advertised: string | null;
+  platform: string;
+  asset_type: "inhouse" | "parent" | null;
+  creator_name: string | null;
+  instagram_handle: string | null;
+  ad_name: string | null;
+  meta_campaign_name: string | null;
+  ad_set_name: string | null;
+  partnership_ad: boolean | null;
+  language: string | null;
+  face_in_first_3s: boolean | null;
+  audio_hook_first_3s: boolean | null;
+  text_in_first_3s: boolean | null;
+  caption: string | null;
+  landing_page_url: string | null;
+  landing_page_type: string | null;
+  cta_used: string | null;
+  tracker_comments: string | null;
+  pause_reason: string | null;
+  meta_status_changed_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

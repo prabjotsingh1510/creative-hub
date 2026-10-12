@@ -41,6 +41,22 @@ describe.skipIf(!dbEnabled)("RLS: creatives, versions, DP fields, workflow", () 
       }
     });
 
+    it("tracker fields (migration 0014): admin + ads may edit, creative may not; tracker_list is readable by all", async () => {
+      const id = await makeCreative(admin);
+      const patch = { product_advertised: "Finger Paints", ad_name: "DP_Test", partnership_ad: true, pause_reason: "n/a" };
+      expect((await admin.client.from("creatives").update(patch).eq("id", id)).error).toBeNull();
+      expect((await ads.client.from("creatives").update({ ad_set_name: "DP_AdSet", language: "Hindi" }).eq("id", id)).error).toBeNull();
+      for (const p of [{ product_advertised: "x" }, { ad_name: "x" }, { caption: "x" }, { landing_page_url: "https://x.example" }]) {
+        expect((await creative.client.from("creatives").update(p).eq("id", id)).error, JSON.stringify(p)).not.toBeNull();
+      }
+      for (const u of [admin, creative, ads]) {
+        const { data, error } = await u.client.from("tracker_list").select("id, sno, ad_name").eq("id", id).maybeSingle();
+        expect(error).toBeNull();
+        expect(data?.ad_name).toBe("DP_Test");
+        expect(data?.sno).toBeGreaterThan(0);
+      }
+    });
+
     it("admin can edit everything", async () => {
       const id = await makeCreative(admin);
       expect((await admin.client.from("creatives").update({ title: "[rls-test] admin", due_date: "2032-02-02", brief: "b", ads_notes: "n", meta_preview_link: "https://x.example" }).eq("id", id)).error).toBeNull();

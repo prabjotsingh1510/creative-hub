@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Activity, Bell, ImageIcon, LayoutDashboard, LogOut, MessageSquare, Settings, UserCircle, Users } from "lucide-react";
+import { Activity, Bell, ImageIcon, LayoutDashboard, LogOut, MessageSquare, Settings, Table2, UserCircle, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { NotificationBell } from "@/components/notifications/bell";
 import { ThemeToggle } from "./theme-toggle";
@@ -69,6 +69,7 @@ export function AppNav({
   const main = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, dot: false, match: "/dashboard" },
     { href: "/creatives", label: "Creatives", icon: ImageIcon, dot: false, match: "/creatives" },
+    { href: "/tracker", label: "Ads Tracker", icon: Table2, dot: false, match: "/tracker" },
     { href: "/channels/general", label: "General", icon: MessageSquare, dot: generalUnread > 0, match: "/channels" },
   ];
   const mobile = [...main, { href: "/notifications", label: "Alerts", icon: Bell, dot: unread > 0, match: "/notifications" }];

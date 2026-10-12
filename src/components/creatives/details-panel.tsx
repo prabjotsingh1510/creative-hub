@@ -11,6 +11,7 @@ import {
   updateAdminFields,
   updateAdsFields,
   updateCreativeFields,
+  updateTrackerFields,
   type Result,
 } from "@/actions/creatives";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import {
 import { formatDateOnly, formatIST, fromISTInput, toISTInput } from "@/lib/time";
 import { LIVE_LABEL, STATUS_LABEL, type Creative, type LiveState, type Role, type Status } from "@/lib/types";
 import { formatInTimeZone } from "date-fns-tz";
+import { ASSET_TYPE_LABEL, LANDING_PAGE_TYPES, yesNoLabel } from "@/lib/tracker";
 
 const selectCls =
   "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60";
@@ -100,6 +102,7 @@ export function DetailsPanel({ creative: c, role }: { creative: Creative; role: 
       <CreativeSection c={c} role={role} />
       <DatesSection c={c} role={role} />
       <AdsSection c={c} role={role} />
+      <TrackerSection c={c} role={role} />
       {canSoftDelete(role) && <DeleteSection c={c} />}
     </aside>
   );
@@ -304,6 +307,120 @@ function AdsSection({ c, role }: { c: Creative; role: Role }) {
         <div className="space-y-1.5"><Label htmlFor="l-meta">Meta Ads preview link</Label><Input id="l-meta" name="meta" type="url" inputMode="url" defaultValue={c.meta_preview_link ?? ""} placeholder="https://fb.me/…" /></div>
         <div className="space-y-1.5"><Label htmlFor="l-notes">DP notes</Label><Textarea id="l-notes" name="notes" rows={3} defaultValue={c.ads_notes ?? ""} /></div>
         <Button type="submit" disabled={pending} className="w-full" size="lg">{pending ? "Saving…" : "Save live status"}</Button>
+      </form>
+    </Section>
+  );
+}
+
+const triValue = (v: boolean | null) => (v === null ? "" : v ? "yes" : "no");
+
+function TrackerSection({ c, role }: { c: Creative; role: Role }) {
+  const { pending, run } = useSave();
+  const triOptions = (
+    <>
+      <option value="">—</option>
+      <option value="yes">Yes</option>
+      <option value="no">No</option>
+    </>
+  );
+
+  if (!canEditAdsFields(role)) {
+    return (
+      <Section title="Ads tracker details" hint="Shown in the Ads Tracker tab.">
+        <Field label="Product advertised">{c.product_advertised ?? "—"}</Field>
+        <Field label="Ad name">{c.ad_name ?? "—"}</Field>
+        <Field label="Meta campaign / ad set">{[c.meta_campaign_name, c.ad_set_name].filter(Boolean).join(" · ") || "—"}</Field>
+        <Field label="Landing page"><LinkOrDash href={c.landing_page_url} /></Field>
+        <Field label="Partnership ad">{yesNoLabel(c.partnership_ad) || "—"}</Field>
+      </Section>
+    );
+  }
+
+  const text = (id: string, name: string, label: string, value: string | null, extra?: string) => (
+    <div className={cn("space-y-1.5", extra)}>
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} name={name} defaultValue={value ?? ""} />
+    </div>
+  );
+  const tri = (id: string, name: string, label: string, value: boolean | null) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <select id={id} name={name} className={selectCls} defaultValue={triValue(value)}>{triOptions}</select>
+    </div>
+  );
+
+  return (
+    <Section title="Ads tracker details" hint="Feeds the Ads Tracker tab (product, ad names, hooks, landing page).">
+      <form
+        key={c.updated_at}
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const f = new FormData(e.currentTarget);
+          const g = (k: string) => String(f.get(k) ?? "") as never;
+          run(
+            () =>
+              updateTrackerFields(c.id, {
+                product_advertised: g("product_advertised"),
+                asset_type: g("asset_type"),
+                creator_name: g("creator_name"),
+                instagram_handle: g("instagram_handle"),
+                ad_name: g("ad_name"),
+                meta_campaign_name: g("meta_campaign_name"),
+                ad_set_name: g("ad_set_name"),
+                partnership_ad: g("partnership_ad"),
+                language: g("language"),
+                face_in_first_3s: g("face_in_first_3s"),
+                audio_hook_first_3s: g("audio_hook_first_3s"),
+                text_in_first_3s: g("text_in_first_3s"),
+                caption: g("caption"),
+                landing_page_url: g("landing_page_url"),
+                landing_page_type: g("landing_page_type"),
+                cta_used: g("cta_used"),
+                pause_reason: g("pause_reason"),
+                tracker_comments: g("tracker_comments"),
+              }),
+            "Tracker details saved",
+          );
+        }}
+      >
+        {text("t-product", "product_advertised", "Product advertised", c.product_advertised)}
+        <div className="space-y-1.5">
+          <Label htmlFor="t-asset">Asset type</Label>
+          <select id="t-asset" name="asset_type" className={selectCls} defaultValue={c.asset_type ?? ""}>
+            <option value="">—</option>
+            {(Object.keys(ASSET_TYPE_LABEL) as (keyof typeof ASSET_TYPE_LABEL)[]).map((k) => (
+              <option key={k} value={k}>{ASSET_TYPE_LABEL[k]}</option>
+            ))}
+          </select>
+        </div>
+        {text("t-creator", "creator_name", "Creator name", c.creator_name)}
+        {text("t-ig", "instagram_handle", "Instagram handle", c.instagram_handle)}
+        {text("t-ad", "ad_name", "Ad name (Meta)", c.ad_name)}
+        {text("t-camp", "meta_campaign_name", "Campaign name (Meta)", c.meta_campaign_name)}
+        {text("t-adset", "ad_set_name", "Ad set name (Meta)", c.ad_set_name)}
+        <div className="grid grid-cols-2 gap-3">
+          {tri("t-partner", "partnership_ad", "Partnership ad", c.partnership_ad)}
+          {text("t-lang", "language", "Language", c.language)}
+          {tri("t-face", "face_in_first_3s", "Face in first 3s", c.face_in_first_3s)}
+          {tri("t-audio", "audio_hook_first_3s", "Audio hook in 3s", c.audio_hook_first_3s)}
+          {tri("t-texthook", "text_in_first_3s", "Text in first 3s", c.text_in_first_3s)}
+          {text("t-cta", "cta_used", "CTA used", c.cta_used)}
+        </div>
+        <div className="space-y-1.5"><Label htmlFor="t-lp">Landing page URL</Label><Input id="t-lp" name="landing_page_url" type="url" inputMode="url" defaultValue={c.landing_page_url ?? ""} placeholder="https://…" /></div>
+        <div className="space-y-1.5">
+          <Label htmlFor="t-lptype">Landing page type</Label>
+          <select id="t-lptype" name="landing_page_type" className={selectCls} defaultValue={c.landing_page_type ?? ""}>
+            <option value="">—</option>
+            {LANDING_PAGE_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5"><Label htmlFor="t-caption">Caption</Label><Textarea id="t-caption" name="caption" rows={4} defaultValue={c.caption ?? ""} /></div>
+        {text("t-reason", "pause_reason", "Reason if paused", c.pause_reason)}
+        <div className="space-y-1.5"><Label htmlFor="t-comments">Tracker comments</Label><Textarea id="t-comments" name="tracker_comments" rows={3} defaultValue={c.tracker_comments ?? ""} /></div>
+        <Button type="submit" disabled={pending} className="w-full" size="lg">{pending ? "Saving…" : "Save tracker details"}</Button>
       </form>
     </Section>
   );
